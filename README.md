@@ -1,0 +1,60 @@
+# 킬비 (가제)
+
+검은 토끼 닌자 킬비가 몰려오는 요괴 사이에서 살아남는 자동 공격 서바이벌 게임입니다. 지금은 **프로토타입**입니다.
+
+![플레이 화면](docs/screenshot_play.png)
+
+## 실행하기
+
+1. [Godot 4](https://godotengine.org/download) (4.3 이상, 일반 버전)을 설치합니다.
+2. Godot을 열고 **가져오기(Import)** → 이 폴더의 `project.godot`을 선택합니다.
+3. 오른쪽 위 ▶ 버튼(F5)으로 실행합니다.
+
+## 조작
+
+| 동작 | 키보드 | 게임패드 |
+| --- | --- | --- |
+| 이동 | WASD / 방향키 | 왼쪽 스틱 |
+| 대시 | Space / Shift | A |
+| 일시정지 | Esc / P | Start |
+| 레벨업 선택 | 마우스, 방향키+Enter, 숫자 1~3 | 방향 + A |
+
+## 프로토타입에 들어간 것
+
+- 이동, 대시(3초 쿨타임, 대시 중 무적)
+- 무기 3종: 쿠나이(시작 무기), 표창, 연기탄. 각각 최대 8레벨
+- 패시브 6종: 손목 붕대, 검은 털, 스파이크 목걸이, 주황 부적, 단련된 다리, 긴 귀
+- 적 2종: 도깨비불(추적), 여우 자객(돌진). 1분부터 여우 등장, 2분 30초에 포위 웨이브
+- 경험치 보석, 레벨업 3지선다, 체력·경험치·시간·처치 수 표시
+- 5분 생존하면 클리어, 쓰러지면 게임 오버, 다시 하기
+
+아직 없는 것: 보스, 진화 무기, 메타 성장, 사운드, 실제 스프라이트, 적끼리 밀어내기.
+
+## 폴더 구조
+
+```
+scenes/main.tscn          시작 씬 (main.gd 하나만 붙어 있음)
+scripts/game_data.gd      밸런스 수치와 이름 (숫자는 여기서 고치기)
+scripts/main.gd           스폰, 레벨업, 게임 오버, 입력 설정
+scripts/player.gd         킬비 이동·대시·체력·경험치
+scripts/kilvi_visual.gd   킬비 임시 그림 (스프라이트로 교체할 곳)
+scripts/enemy.gd          적 행동과 임시 그림
+scripts/xp_gem.gd         경험치 보석
+scripts/weapons/          무기 3종과 투사체
+scripts/ui/               HUD, 레벨업 화면, 메뉴
+scripts/background.gd     임시 바닥
+assets/fonts/             갈무리11 폰트 (SIL OFL, 상업 이용 가능)
+art/                      직접 그린 스프라이트를 넣을 곳
+```
+
+## 스프라이트 넣는 법 (간단 버전)
+
+1. 그린 PNG를 `art/kilvi/` 같은 폴더에 넣습니다. 오른쪽을 보는 모습만 그리면 됩니다.
+2. `scripts/player.gd`의 `_ready()`에서 `KilviVisual` 대신 `AnimatedSprite2D`를 만들고 SpriteFrames에 애니메이션(idle, run, hit, dash, death)을 등록합니다.
+3. 첫 스프라이트가 나오면 이 작업은 Claude가 해 드릴 수 있습니다.
+
+기준 해상도는 640×360이고, 창 크기는 1280×720(정수 배율 확대)입니다. 크기 목록은 설계 문서의 "스프라이트 아트 목록"을 참고하세요.
+
+## 폰트 라이선스
+
+갈무리(Galmuri) 폰트는 SIL Open Font License 1.1을 따릅니다. 전문은 `assets/fonts/Galmuri-OFL.md`에 있습니다.

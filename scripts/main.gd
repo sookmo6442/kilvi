@@ -1,0 +1,236 @@
+extends Node2D
+## 게임 한 판을 관리한다: 스폰, 레벨업, 게임 오버, 일시정지.
+
+const PlayerScript := preload("res://scripts/player.gd")
+const EnemyScript := preload("res://scripts/enemy.gd")
+const GemScript := preload("res://scripts/xp_gem.gd")
+const HudScript := preload("res://scripts/ui/hud.gd")
+const LevelUpScript := preload("res://scripts/ui/level_up_ui.gd")
+const MenuScript := preload("res://scripts/ui/menu_panel.gd")
+const BackgroundScript := preload("res://scripts/background.gd")
+
+var world: Node2D
+var player: Player
+var hud: CanvasLayer
+var level_up_ui: CanvasLayer
+var menu: CanvasLayer
+
+var time := 0.0
+var kills := 0
+var _spawn_acc := 0.0
+var _ring_done := false
+var _finished := false
+
+
+func _ready() -> void:
+	randomize()
+	_setup_input()
+
+	var bg := BackgroundScript.new()
+	add_child(bg)
+
+	world = Node2D.new()
+	world.name = "World"
+	world.y_sort_enabled = true
+	add_child(world)
+
+	player = PlayerScript.new()
+	player.name = "Kilvi"
+	player.world = world
+	world.add_child(player)
+	bg.target = player
+
+	var cam := Camera2D.new()
+	cam.position_smoothing_enabled = true
+	cam.position_smoothing_speed = 10.0
+	player.add_child(cam)
+
+	hud = HudScript.new()
+	add_child(hud)
+	level_up_ui = LevelUpScript.new()
+	add_child(level_up_ui)
+	menu = MenuScript.new()
+	add_child(menu)
+
+	player.hp_changed.connect(hud.set_hp)
+	player.xp_changed.connect(hud.set_xp)
+	player.leveled_up.connect(_on_leveled_up)
+	player.died.connect(_on_player_died)
+	level_up_ui.chosen.connect(_on_upgrade_chosen)
+	menu.button_pressed.connect(_on_menu_button)
+
+	player.add_or_level_weapon("kunai")
+	hud.set_hp(player.hp, player.max_hp)
+	hud.set_xp(player.xp, player.xp_needed, player.level)
+
+
+func _process(delta: float) -> void:
+	if _finished or player.is_dead:
+		return
+	time += delta
+	hud.set_time(time)
+	hud.set_dash(player.dash_cooldown_left, Player.DASH_COOLDOWN)
+	_update_spawns(delta)
+	if time >= GameData.RUN_LENGTH:
+		_finish(true)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause") and not _finished and not level_up_ui.visible:
+		if menu.visible:
+			menu.close()
+		else:
+			menu.open("일시정지", "", [["resume", "계속하기"], ["restart", "처음부터"], ["quit", "게임 종료"]])
+		get_viewport().set_input_as_handled()
+
+
+# --- 스폰 ---------------------------------------------------------------
+
+func _update_spawns(delta: float) -> void:
+	# 초당 스폰 수: 시작 1마리 → 5분에 약 13마리
+	var rate := 1.0 + time / 25.0
+	_spawn_acc += rate * delta
+	var alive := get_tree().get_nodes_in_group("enemies").size()
+	while _spawn_acc >= 1.0:
+		_spawn_acc -= 1.0
+		if alive >= GameData.MAX_ENEMIES:
+			continue
+		var fox_chance := clampf((time - 60.0) / 240.0, 0.0, 0.45)
+		_spawn_enemy("fox" if randf() < fox_chance else "wisp", _random_edge_position())
+		alive += 1
+
+	# 2분 30초: 도깨비불이 킬비를 둥글게 포위한다
+	if not _ring_done and time >= 150.0:
+		_ring_done = true
+		for i in 32:
+			_spawn_enemy("wisp", player.global_position + Vector2.from_angle(TAU * i / 32.0) * 220.0)
+
+
+func _random_edge_position() -> Vector2:
+	return player.global_position + Vector2.from_angle(randf() * TAU) * randf_range(370.0, 420.0)
+
+
+func _spawn_enemy(id: String, pos: Vector2) -> void:
+	var e: Enemy = EnemyScript.new()
+	e.setup(id, player, 1.0 + time / 150.0)
+	e.position = pos
+	e.killed.connect(_on_enemy_killed)
+	world.add_child(e)
+
+
+func _on_enemy_killed(e: Enemy) -> void:
+	kills += 1
+	hud.set_kills(kills)
+	var gem: Node2D = GemScript.new()
+	gem.value = e.xp_value
+	gem.player = player
+	gem.position = e.global_position
+	world.add_child.call_deferred(gem)
+
+
+# --- 레벨업 -------------------------------------------------------------
+
+func _on_leveled_up() -> void:
+	if not level_up_ui.visible:
+		_open_next_level_up.call_deferred()
+
+
+func _open_next_level_up() -> void:
+	if player.pending_levelups <= 0 or player.is_dead:
+		return
+	level_up_ui.open(_roll_options())
+
+
+func _roll_options() -> Array:
+	var pool := []
+	for id in GameData.WEAPONS:
+		var d: Dictionary = GameData.WEAPONS[id]
+		var lv := player.weapon_level(id)
+		if lv == 0 and player.weapons.size() < GameData.MAX_WEAPONS:
+			pool.append({"kind": "weapon", "id": id, "label": "%s  [새 무기]\n   %s" % [d.name, d.desc]})
+		elif lv > 0 and lv < d.max_level:
+			pool.append({"kind": "weapon", "id": id, "label": "%s  Lv %d → %d\n   %s" % [d.name, lv, lv + 1, d.desc]})
+	for id in GameData.PASSIVES:
+		var d: Dictionary = GameData.PASSIVES[id]
+		var lv := player.passive_level(id)
+		if lv == 0 and player.passives.size() >= GameData.MAX_PASSIVES:
+			continue
+		if lv < d.max_level:
+			pool.append({"kind": "passive", "id": id, "label": "%s  Lv %d → %d\n   %s" % [d.name, lv, lv + 1, d.desc]})
+	pool.shuffle()
+	var options := pool.slice(0, 3)
+	if options.is_empty():
+		options = [{"kind": "heal", "id": "", "label": "당근\n   체력 30 회복"}]
+	return options
+
+
+func _on_upgrade_chosen(option: Dictionary) -> void:
+	match option.kind:
+		"weapon": player.add_or_level_weapon(option.id)
+		"passive": player.add_passive(option.id)
+		"heal": player.heal(30.0)
+	player.pending_levelups -= 1
+	if player.pending_levelups > 0:
+		_open_next_level_up.call_deferred()
+
+
+# --- 끝 -----------------------------------------------------------------
+
+func _on_player_died() -> void:
+	_finish(false)
+
+
+func _finish(won: bool) -> void:
+	if _finished:
+		return
+	_finished = true
+	level_up_ui.visible = false
+	var body := "생존 시간 %02d:%02d\n레벨 %d · 처치 %d" % [int(time) / 60, int(time) % 60, player.level, kills]
+	menu.open("살아남았다!" if won else "쓰러졌다...", body, [["restart", "다시 하기"], ["quit", "게임 종료"]])
+
+
+func _on_menu_button(id: String) -> void:
+	match id:
+		"resume":
+			menu.close()
+		"restart":
+			get_tree().paused = false
+			get_tree().reload_current_scene()
+		"quit":
+			get_tree().quit()
+
+
+# --- 입력 ---------------------------------------------------------------
+
+func _setup_input() -> void:
+	## 키 설정을 코드에서 만든다. 나중에 프로젝트 설정 > 입력 맵으로 옮겨도 된다.
+	if InputMap.has_action("dash"):
+		return # 다시 하기로 씬을 새로 불러온 경우
+	var keys := {
+		"move_left": [KEY_A, KEY_LEFT],
+		"move_right": [KEY_D, KEY_RIGHT],
+		"move_up": [KEY_W, KEY_UP],
+		"move_down": [KEY_S, KEY_DOWN],
+		"dash": [KEY_SPACE, KEY_SHIFT],
+		"pause": [KEY_ESCAPE, KEY_P],
+	}
+	for action in keys:
+		InputMap.add_action(action, 0.2)
+		for k in keys[action]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = k
+			InputMap.action_add_event(action, ev)
+	var axes := {
+		"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0],
+		"move_up": [JOY_AXIS_LEFT_Y, -1.0], "move_down": [JOY_AXIS_LEFT_Y, 1.0],
+	}
+	for action in axes:
+		var ev := InputEventJoypadMotion.new()
+		ev.axis = axes[action][0]
+		ev.axis_value = axes[action][1]
+		InputMap.action_add_event(action, ev)
+	var buttons := {"dash": JOY_BUTTON_A, "pause": JOY_BUTTON_START}
+	for action in buttons:
+		var ev := InputEventJoypadButton.new()
+		ev.button_index = buttons[action]
+		InputMap.action_add_event(action, ev)
