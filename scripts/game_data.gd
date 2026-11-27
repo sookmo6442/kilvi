@@ -2,7 +2,7 @@ class_name GameData
 extends RefCounted
 ## 밸런스 수치와 이름을 한곳에 모아 둔 데이터. 숫자는 여기서만 고치면 된다.
 
-const RUN_LENGTH := 300.0 # 프로토타입 한 판 길이(초). 설계상 정식 판은 1200초.
+const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 3
 const MAX_PASSIVES := 6
 const MAX_ENEMIES := 350
@@ -43,7 +43,32 @@ const ENEMIES := {
 		"color": Color(0.55, 0.8, 1.0), "behavior": "chase"},
 	"fox": {"name": "여우 자객", "hp": 14.0, "speed": 62.0, "damage": 8.0, "radius": 9.0, "xp": 2,
 		"color": Color(0.95, 0.5, 0.2), "behavior": "charge"},
+	"crow": {"name": "까마귀 궁수", "hp": 12.0, "speed": 50.0, "damage": 6.0, "radius": 8.0, "xp": 3,
+		"color": Color(0.2, 0.2, 0.28), "behavior": "ranged"},
+	"turtle": {"name": "돌 거북", "hp": 70.0, "speed": 22.0, "damage": 12.0, "radius": 12.0, "xp": 6,
+		"color": Color(0.5, 0.55, 0.5), "behavior": "tank"},
 }
+
+## 시간대별 등장 비율. [시작 초, {적: 가중치}] — 해당 시각 이후 가장 마지막 항목을 쓴다.
+const SPAWN_TABLE := [
+	[0.0, {"wisp": 1.0}],
+	[180.0, {"wisp": 0.7, "fox": 0.3}],
+	[420.0, {"wisp": 0.5, "fox": 0.3, "crow": 0.2}],
+	[720.0, {"wisp": 0.35, "fox": 0.3, "crow": 0.2, "turtle": 0.15}],
+	[1020.0, {"wisp": 0.25, "fox": 0.3, "crow": 0.25, "turtle": 0.2}],
+]
+
+## 보스. time초에 등장. mark_limit만큼 표식이 쌓이면 그로기.
+const BOSSES := [
+	{"id": "big_goblin", "time": 300.0, "name": "큰 도깨비", "hp": 180.0, "speed": 32.0, "damage": 15.0,
+		"radius": 18.0, "mark_limit": 12, "color": Color(0.85, 0.3, 0.3)},
+	{"id": "gumiho", "time": 600.0, "name": "구미호", "hp": 550.0, "speed": 42.0, "damage": 18.0,
+		"radius": 16.0, "mark_limit": 16, "color": Color(1.0, 0.85, 0.6)},
+	{"id": "great_crow", "time": 900.0, "name": "대까마귀", "hp": 1100.0, "speed": 55.0, "damage": 20.0,
+		"radius": 18.0, "mark_limit": 20, "color": Color(0.15, 0.12, 0.2)},
+	{"id": "moon_hunter", "time": 1200.0, "name": "달의 사냥꾼", "hp": 3000.0, "speed": 70.0, "damage": 25.0,
+		"radius": 14.0, "mark_limit": 25, "color": Color(0.9, 0.9, 1.0), "final": true},
+]
 
 static func xp_for_level(level: int) -> int:
 	return 5 + (level - 1) * 7

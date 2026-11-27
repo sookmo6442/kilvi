@@ -9,6 +9,9 @@ var _time_label: Label
 var _kills_label: Label
 var _contract_label: Label
 var _skill_label: Label
+var _boss_label: Label
+var _boss_bar: ProgressBar
+var _boss_marks: ProgressBar
 var _skill_bar: ProgressBar
 var _message_label: Label
 var _message_left := 0.0
@@ -71,6 +74,25 @@ func _ready() -> void:
 	_dash_bar.size = Vector2(90, 3)
 	root.add_child(_dash_bar)
 
+	# 위쪽 가운데: 보스 체력과 표식
+	_boss_label = Label.new()
+	_boss_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_label.position = Vector2(-150, 40)
+	_boss_label.custom_minimum_size = Vector2(300, 0)
+	_boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(_boss_label)
+	_boss_bar = UiStyle.bar(Color(0.8, 0.15, 0.2), 6)
+	_boss_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_bar.position = Vector2(-150, 58)
+	_boss_bar.size = Vector2(300, 6)
+	root.add_child(_boss_bar)
+	_boss_marks = UiStyle.bar(Color(1.0, 0.3, 0.2), 3)
+	_boss_marks.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_marks.position = Vector2(-150, 66)
+	_boss_marks.size = Vector2(300, 3)
+	root.add_child(_boss_marks)
+	hide_boss()
+
 	# 왼쪽 아래: 특수 스킬
 	_skill_label = Label.new()
 	_skill_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -118,6 +140,23 @@ func set_skill(left: float, total: float) -> void:
 	else:
 		_skill_label.text = "[%s] %s  준비" % [_skill_key, _skill_name]
 		_skill_label.modulate = Color.WHITE
+
+
+func set_boss(boss_name: String, hp: float, max_hp: float, marks: int, mark_limit: int, staggered: bool) -> void:
+	_boss_label.visible = true
+	_boss_bar.visible = true
+	_boss_marks.visible = true
+	_boss_label.text = "%s%s" % [boss_name, "  [그로기]" if staggered else ""]
+	_boss_bar.max_value = max_hp
+	_boss_bar.value = hp
+	_boss_marks.max_value = mark_limit
+	_boss_marks.value = mark_limit if staggered else marks
+
+
+func hide_boss() -> void:
+	_boss_label.visible = false
+	_boss_bar.visible = false
+	_boss_marks.visible = false
 
 
 func set_contract(text: String) -> void:

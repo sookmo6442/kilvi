@@ -11,6 +11,9 @@ const BackgroundScript := preload("res://scripts/background.gd")
 const PostFxScript := preload("res://scripts/ui/post_fx.gd")
 const SlashScript := preload("res://scripts/effects/slash.gd")
 const ChestScript := preload("res://scripts/treasure_chest.gd")
+const BossScript := preload("res://scripts/boss.gd")
+const SEP_CELL := 16.0
+const RING_WAVES := [[150.0, "wisp"], [450.0, "fox"], [750.0, "wisp"], [1050.0, "fox"]]
 
 const CONTRACT_FIRST := 45.0 # 첫 표적 의뢰 시각(초)
 const CONTRACT_INTERVAL := 60.0
@@ -29,7 +32,9 @@ var post_fx: CanvasLayer
 var time := 0.0
 var kills := 0
 var _spawn_acc := 0.0
-var _ring_done := false
+var _ring_index := 0
+var _boss_index := 0
+var _boss: Boss = null
 var _finished := false
 var _next_contract := CONTRACT_FIRST
 var _contract_target: Enemy = null
@@ -102,9 +107,41 @@ func _process(delta: float) -> void:
 	hud.set_dash(player.dash_cooldown_left, Player.DASH_COOLDOWN)
 	hud.set_skill(player.skill_cooldown_left, player.skill_cooldown())
 	_update_spawns(delta)
+	_update_bosses()
 	_update_contract()
-	if time >= GameData.RUN_LENGTH:
-		_finish(true)
+
+
+func _physics_process(_delta: float) -> void:
+	_separate_enemies()
+
+
+## 적끼리 겹치지 않게 살짝 밀어낸다. 격자로 나눠서 가까운 적끼리만 비교한다.
+func _separate_enemies() -> void:
+	var grid := {}
+	var enemies := get_tree().get_nodes_in_group("enemies")
+	for e in enemies:
+		var cell := Vector2i(floori(e.position.x / SEP_CELL), floori(e.position.y / SEP_CELL))
+		if grid.has(cell):
+			grid[cell].append(e)
+		else:
+			grid[cell] = [e]
+	for e in enemies:
+		var cell := Vector2i(floori(e.position.x / SEP_CELL), floori(e.position.y / SEP_CELL))
+		var push := Vector2.ZERO
+		for dx in range(-1, 2):
+			for dy in range(-1, 2):
+				var bucket = grid.get(cell + Vector2i(dx, dy))
+				if bucket == null:
+					continue
+				for o in bucket:
+					if o == e:
+						continue
+					var d: Vector2 = e.position - o.position
+					var min_d: float = (e.radius * e.size_mult + o.radius * o.size_mult) * 0.8
+					var l := d.length()
+					if l < min_d:
+						push += (d / l if l > 0.01 else Vector2.from_angle(randf() * TAU)) * (min_d - l)
+		e.separation = push * 12.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -119,23 +156,99 @@ func _unhandled_input(event: InputEvent) -> void:
 # --- 스폰 ---------------------------------------------------------------
 
 func _update_spawns(delta: float) -> void:
-	# 초당 스폰 수: 시작 1마리 → 5분에 약 13마리
-	var rate := 1.0 + time / 25.0
+	# 초당 스폰 수: 시작 1마리 → 10분 약 9마리 → 20분 약 18마리. 보스전에는 절반.
+	var rate := 1.0 + time / 70.0
+	if _boss != null:
+		rate *= 0.5
 	_spawn_acc += rate * delta
 	var alive := get_tree().get_nodes_in_group("enemies").size()
 	while _spawn_acc >= 1.0:
 		_spawn_acc -= 1.0
 		if alive >= GameData.MAX_ENEMIES:
 			continue
-		var fox_chance := clampf((time - 60.0) / 240.0, 0.0, 0.45)
-		_spawn_enemy("fox" if randf() < fox_chance else "wisp", _random_edge_position())
+		_spawn_enemy(_pick_enemy_type(), _random_edge_position())
 		alive += 1
 
-	# 2분 30초: 도깨비불이 킬비를 둥글게 포위한다
-	if not _ring_done and time >= 150.0:
-		_ring_done = true
+	# 포위 웨이브: 킬비를 둥글게 둘러싼다
+	if _ring_index < RING_WAVES.size() and time >= RING_WAVES[_ring_index][0]:
+		var id: String = RING_WAVES[_ring_index][1]
+		_ring_index += 1
 		for i in 32:
-			_spawn_enemy("wisp", player.global_position + Vector2.from_angle(TAU * i / 32.0) * 220.0)
+			_spawn_enemy(id, player.global_position + Vector2.from_angle(TAU * i / 32.0) * 220.0)
+
+
+func _pick_enemy_type() -> String:
+	var weights: Dictionary = GameData.SPAWN_TABLE[0][1]
+	for row in GameData.SPAWN_TABLE:
+		if time >= row[0]:
+			weights = row[1]
+	var total := 0.0
+	for k in weights:
+		total += weights[k]
+	var r := randf() * total
+	for k in weights:
+		r -= weights[k]
+		if r <= 0.0:
+			return k
+	return "wisp"
+
+
+func _hp_mult() -> float:
+	return 1.0 + time / 200.0
+
+
+## 보스가 졸개를 부를 때 쓴다.
+func spawn_enemy_at(id: String, pos: Vector2) -> void:
+	_spawn_enemy(id, pos)
+
+
+# --- 보스 ---------------------------------------------------------------
+
+func _update_bosses() -> void:
+	if _boss != null:
+		if is_instance_valid(_boss) and not _boss.dead:
+			hud.set_boss(_boss.boss_name, _boss.hp, _boss.max_hp, _boss.marks, _boss.mark_limit, _boss.stagger_left > 0.0)
+		return
+	if _boss_index >= GameData.BOSSES.size():
+		return
+	var d: Dictionary = GameData.BOSSES[_boss_index]
+	if time < d.time:
+		return
+	_boss_index += 1
+	var b: Boss = BossScript.new()
+	b.setup_boss(d, player, 1.0 + time / 600.0)
+	b.position = player.global_position + Vector2.from_angle(randf() * TAU) * 260.0
+	b.killed.connect(_on_enemy_killed)
+	b.staggered.connect(_on_boss_staggered)
+	world.add_child(b)
+	_boss = b
+	hud.flash_message("%s 출현!" % d.name)
+	post_fx.execution_flash(0.6)
+
+
+func _on_boss_staggered(b: Boss) -> void:
+	hud.flash_message("그로기!")
+	var slash: Node2D = SlashScript.new()
+	slash.position = b.global_position
+	slash.length = 70.0
+	world.add_child(slash)
+	post_fx.execution_flash(0.8)
+	_hitstop(0.1)
+
+
+func _on_boss_killed(b: Boss) -> void:
+	_boss = null
+	hud.hide_boss()
+	post_fx.execution_flash(1.0)
+	_hitstop(0.2)
+	if b.is_final:
+		_finish.call_deferred(true)
+		return
+	hud.flash_message("%s 처치!" % b.boss_name)
+	var chest: Node2D = ChestScript.new()
+	chest.player = player
+	chest.position = b.global_position
+	world.add_child.call_deferred(chest)
 
 
 func _random_edge_position() -> Vector2:
@@ -144,7 +257,7 @@ func _random_edge_position() -> Vector2:
 
 func _spawn_enemy(id: String, pos: Vector2) -> void:
 	var e: Enemy = EnemyScript.new()
-	e.setup(id, player, 1.0 + time / 150.0)
+	e.setup(id, player, _hp_mult())
 	e.position = pos
 	e.killed.connect(_on_enemy_killed)
 	world.add_child(e)
@@ -156,10 +269,13 @@ func _update_contract() -> void:
 	if _contract_target != null and is_instance_valid(_contract_target) and not _contract_target.dead:
 		hud.set_contract("표적 의뢰  %d초" % ceili(_contract_target.target_time_left))
 		return
+	if _boss != null:
+		_next_contract = maxf(_next_contract, time + 20.0)
+		return
 	if time >= _next_contract:
 		_next_contract += CONTRACT_INTERVAL
 		var e: Enemy = EnemyScript.new()
-		e.setup("fox", player, 1.0 + time / 150.0, true, CONTRACT_TIME)
+		e.setup("fox", player, _hp_mult(), true, CONTRACT_TIME)
 		e.position = _random_edge_position()
 		e.killed.connect(_on_enemy_killed)
 		world.add_child(e)
@@ -199,6 +315,8 @@ func _hitstop(duration: float) -> void:
 
 
 func _on_enemy_killed(e: Enemy) -> void:
+	if e.is_boss:
+		_on_boss_killed(e as Boss)
 	if e.is_target:
 		_on_contract_done(not e.escaped, e.global_position)
 	if e.escaped:

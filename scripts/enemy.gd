@@ -28,6 +28,10 @@ var is_target := false
 var target_time_left := 0.0
 var escaped := false
 var size_mult := 1.0
+var knock_resist := 0.0
+var is_boss := false
+## 적끼리 겹치지 않게 main이 매 프레임 채워 주는 밀어내기 벡터
+var separation := Vector2.ZERO
 
 var _knock := Vector2.ZERO
 var _flash := 0.0
@@ -51,6 +55,8 @@ func setup(id: String, p: Player, hp_mult: float, target: bool = false, target_t
 	behavior = d.behavior
 	_charge_timer = randf_range(1.5, 3.0)
 	_t = randf() * 10.0
+	if behavior == "tank":
+		knock_resist = 0.85
 	if target:
 		is_target = true
 		target_time_left = target_time
@@ -93,7 +99,17 @@ func _physics_process(delta: float) -> void:
 	var dist := to_player.length()
 	var spd := speed * (0.5 if slow_time > 0.0 else 1.0)
 
-	if behavior == "charge":
+	if behavior == "ranged":
+		# 140px 거리를 유지하며 깃털을 쏜다
+		if dist < 110.0:
+			dir = -dir
+		elif dist < 160.0:
+			dir = dir.orthogonal() * (1.0 if int(_t / 3.0) % 2 == 0 else -1.0)
+		_charge_timer -= delta
+		if _charge_timer <= 0.0 and dist < 260.0 and not player.is_stealthed():
+			_charge_timer = randf_range(2.2, 3.0)
+			EnemyBullet.fire(get_parent(), global_position, to_player.normalized() * 120.0, damage, player, Color(0.3, 0.3, 0.4))
+	elif behavior == "charge":
 		_charge_timer -= delta
 		if _charging > 0.0:
 			_charging -= delta
@@ -104,7 +120,8 @@ func _physics_process(delta: float) -> void:
 			_charging = 0.45
 			_charge_timer = randf_range(2.2, 3.2)
 
-	position += dir * spd * delta + _knock * delta
+	position += dir * spd * delta + _knock * delta + separation * delta
+	separation = Vector2.ZERO
 	_knock = _knock.move_toward(Vector2.ZERO, 900.0 * delta)
 
 	if dist < radius * size_mult + Player.HIT_RADIUS:
@@ -123,7 +140,7 @@ func take_damage(amount: float, knockback: Vector2 = Vector2.ZERO) -> void:
 	if dead:
 		return
 	hp -= amount
-	_knock += knockback
+	_knock += knockback * (1.0 - knock_resist)
 	_flash = 0.08
 	queue_redraw()
 	if hp <= 0.0:
@@ -163,6 +180,20 @@ func _draw() -> void:
 			Vector2(-radius, 0), Vector2(0, -radius * 2.2), Vector2(radius, 0)]), c)
 		draw_rect(Rect2(1, -2, 2, 3), Color(0.1, 0.1, 0.2))
 		draw_rect(Rect2(-3, -2, 2, 3), Color(0.1, 0.1, 0.2))
+	elif type_id == "crow":
+		# 까마귀 궁수: 검은 몸 + 부리 + 활
+		draw_circle(Vector2.ZERO, radius, c)
+		draw_colored_polygon(PackedVector2Array([Vector2(5, -3), Vector2(12, -1), Vector2(5, 1)]), Color(1.0, 0.75, 0.2))
+		draw_colored_polygon(PackedVector2Array([Vector2(-6, -2), Vector2(-14, -8), Vector2(-12, 2)]), c)
+		draw_circle(Vector2(3, -3), 1.5, Color(1.0, 0.3, 0.2))
+		draw_arc(Vector2(-2, 2), 8.0, -1.0, 1.0, 8, Color(0.6, 0.45, 0.25), 1.0)
+	elif type_id == "turtle":
+		# 돌 거북: 등껍질 + 머리
+		draw_circle(Vector2(9, 2), 4.0, Color(0.45, 0.5, 0.42))
+		draw_circle(Vector2.ZERO, radius, c)
+		draw_circle(Vector2.ZERO, radius * 0.65, c.darkened(0.25))
+		draw_line(Vector2(-radius * 0.6, 0), Vector2(radius * 0.6, 0), c.darkened(0.4), 1.0)
+		draw_line(Vector2(0, -radius * 0.6), Vector2(0, radius * 0.6), c.darkened(0.4), 1.0)
 	else:
 		# 여우 자객: 몸통 + 귀 + 꼬리 + 가면
 		draw_circle(Vector2.ZERO, radius, c)
