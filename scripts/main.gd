@@ -16,6 +16,9 @@ const CONTRACT_FIRST := 45.0 # 첫 표적 의뢰 시각(초)
 const CONTRACT_INTERVAL := 60.0
 const CONTRACT_TIME := 30.0 # 표적을 잡아야 하는 제한 시간
 
+## 다시 하기를 눌러도 지난번 고른 스킬에 커서를 둔다
+static var last_skill := "stealth"
+
 var world: Node2D
 var player: Player
 var hud: CanvasLayer
@@ -75,6 +78,19 @@ func _ready() -> void:
 	player.add_or_level_weapon("kunai")
 	hud.set_hp(player.hp, player.max_hp)
 	hud.set_xp(player.xp, player.xp_needed, player.level)
+	_open_skill_select.call_deferred()
+
+
+func _open_skill_select() -> void:
+	var options := []
+	var focus := 0
+	for id in GameData.SKILLS:
+		var d: Dictionary = GameData.SKILLS[id]
+		if id == last_skill:
+			focus = options.size()
+		options.append({"kind": "skill", "id": id,
+			"label": "%s  [%s · %d초]\n   %s" % [d.name, d.key, int(d.cooldown), d.desc]})
+	level_up_ui.open(options, "특수 스킬을 하나 고르세요", focus)
 
 
 func _process(delta: float) -> void:
@@ -83,6 +99,7 @@ func _process(delta: float) -> void:
 	time += delta
 	hud.set_time(time)
 	hud.set_dash(player.dash_cooldown_left, Player.DASH_COOLDOWN)
+	hud.set_skill(player.skill_cooldown_left, player.skill_cooldown())
 	_update_spawns(delta)
 	_update_contract()
 	if time >= GameData.RUN_LENGTH:
@@ -233,6 +250,12 @@ func _roll_options() -> Array:
 
 
 func _on_upgrade_chosen(option: Dictionary) -> void:
+	if option.kind == "skill":
+		player.skill_id = option.id
+		last_skill = option.id
+		var d: Dictionary = GameData.SKILLS[option.id]
+		hud.setup_skill(d.name, d.key)
+		return
 	match option.kind:
 		"weapon": player.add_or_level_weapon(option.id)
 		"passive": player.add_passive(option.id)
@@ -282,6 +305,7 @@ func _setup_input() -> void:
 		"move_up": [KEY_W, KEY_UP],
 		"move_down": [KEY_S, KEY_DOWN],
 		"dash": [KEY_SPACE, KEY_SHIFT],
+		"skill": [KEY_Q, KEY_E],
 		"pause": [KEY_ESCAPE, KEY_P],
 	}
 	for action in keys:
@@ -299,7 +323,7 @@ func _setup_input() -> void:
 		ev.axis = axes[action][0]
 		ev.axis_value = axes[action][1]
 		InputMap.action_add_event(action, ev)
-	var buttons := {"dash": JOY_BUTTON_A, "pause": JOY_BUTTON_START}
+	var buttons := {"dash": JOY_BUTTON_A, "skill": JOY_BUTTON_Y, "pause": JOY_BUTTON_START}
 	for action in buttons:
 		var ev := InputEventJoypadButton.new()
 		ev.button_index = buttons[action]

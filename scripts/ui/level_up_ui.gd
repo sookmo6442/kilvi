@@ -6,6 +6,7 @@ signal chosen(option: Dictionary)
 
 var _buttons: Array[Button] = []
 var _options: Array = []
+var _title: Label
 
 
 func _ready() -> void:
@@ -26,11 +27,10 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 8)
 	center.add_child(box)
 
-	var title := Label.new()
-	title.text = "레벨 업!"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_color", UiStyle.ORANGE)
-	box.add_child(title)
+	_title = Label.new()
+	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title.add_theme_color_override("font_color", UiStyle.ORANGE)
+	box.add_child(_title)
 
 	for i in 3:
 		var b := UiStyle.button("")
@@ -41,7 +41,8 @@ func _ready() -> void:
 		_buttons.append(b)
 
 
-func open(options: Array) -> void:
+func open(options: Array, title: String = "레벨 업!", focus_index: int = 0) -> void:
+	_title.text = title
 	_options = options
 	for i in _buttons.size():
 		var b := _buttons[i]
@@ -52,7 +53,7 @@ func open(options: Array) -> void:
 			b.visible = false
 	visible = true
 	get_tree().paused = true
-	_buttons[0].grab_focus()
+	_buttons[clampi(focus_index, 0, options.size() - 1)].grab_focus()
 
 
 func _unhandled_input(event: InputEvent) -> void:
