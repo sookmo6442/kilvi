@@ -8,18 +8,29 @@ const HudScript := preload("res://scripts/ui/hud.gd")
 const LevelUpScript := preload("res://scripts/ui/level_up_ui.gd")
 const MenuScript := preload("res://scripts/ui/menu_panel.gd")
 const BackgroundScript := preload("res://scripts/background.gd")
+const PostFxScript := preload("res://scripts/ui/post_fx.gd")
+const SlashScript := preload("res://scripts/effects/slash.gd")
+const ChestScript := preload("res://scripts/treasure_chest.gd")
+
+const CONTRACT_FIRST := 45.0 # 첫 표적 의뢰 시각(초)
+const CONTRACT_INTERVAL := 60.0
+const CONTRACT_TIME := 30.0 # 표적을 잡아야 하는 제한 시간
 
 var world: Node2D
 var player: Player
 var hud: CanvasLayer
 var level_up_ui: CanvasLayer
 var menu: CanvasLayer
+var post_fx: CanvasLayer
 
 var time := 0.0
 var kills := 0
 var _spawn_acc := 0.0
 var _ring_done := false
 var _finished := false
+var _next_contract := CONTRACT_FIRST
+var _contract_target: Enemy = null
+var _last_hitstop := -1.0
 
 
 func _ready() -> void:
@@ -45,6 +56,8 @@ func _ready() -> void:
 	cam.position_smoothing_speed = 10.0
 	player.add_child(cam)
 
+	post_fx = PostFxScript.new()
+	add_child(post_fx)
 	hud = HudScript.new()
 	add_child(hud)
 	level_up_ui = LevelUpScript.new()
@@ -71,6 +84,7 @@ func _process(delta: float) -> void:
 	hud.set_time(time)
 	hud.set_dash(player.dash_cooldown_left, Player.DASH_COOLDOWN)
 	_update_spawns(delta)
+	_update_contract()
 	if time >= GameData.RUN_LENGTH:
 		_finish(true)
 
@@ -118,7 +132,61 @@ func _spawn_enemy(id: String, pos: Vector2) -> void:
 	world.add_child(e)
 
 
+# --- 표적 의뢰 -----------------------------------------------------------
+
+func _update_contract() -> void:
+	if _contract_target != null and is_instance_valid(_contract_target) and not _contract_target.dead:
+		hud.set_contract("표적 의뢰  %d초" % ceili(_contract_target.target_time_left))
+		return
+	if time >= _next_contract:
+		_next_contract += CONTRACT_INTERVAL
+		var e: Enemy = EnemyScript.new()
+		e.setup("fox", player, 1.0 + time / 150.0, true, CONTRACT_TIME)
+		e.position = _random_edge_position()
+		e.killed.connect(_on_enemy_killed)
+		world.add_child(e)
+		_contract_target = e
+		hud.flash_message("표적 출현!")
+
+
+func _on_contract_done(success: bool, pos: Vector2) -> void:
+	_contract_target = null
+	hud.set_contract("")
+	if success:
+		hud.flash_message("의뢰 완수")
+		var chest: Node2D = ChestScript.new()
+		chest.player = player
+		chest.position = pos
+		world.add_child.call_deferred(chest)
+		post_fx.execution_flash(1.0)
+		_hitstop(0.12)
+	else:
+		hud.flash_message("표적이 도망쳤다")
+
+
+func _hitstop(duration: float) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_hitstop < 0.25:
+		return
+	_last_hitstop = now
+	Engine.time_scale = 0.05
+	await get_tree().create_timer(duration, true, false, true).timeout
+	Engine.time_scale = 1.0
+
+
 func _on_enemy_killed(e: Enemy) -> void:
+	if e.is_target:
+		_on_contract_done(not e.escaped, e.global_position)
+	if e.escaped:
+		return
+	if e.executed:
+		var slash: Node2D = SlashScript.new()
+		slash.position = e.global_position
+		slash.length = 34.0 * e.size_mult
+		world.add_child.call_deferred(slash)
+		if not e.is_target:
+			post_fx.execution_flash(0.5)
+			_hitstop(0.04)
 	kills += 1
 	hud.set_kills(kills)
 	var gem: Node2D = GemScript.new()
@@ -184,6 +252,7 @@ func _finish(won: bool) -> void:
 	if _finished:
 		return
 	_finished = true
+	Engine.time_scale = 1.0
 	level_up_ui.visible = false
 	var body := "생존 시간 %02d:%02d\n레벨 %d · 처치 %d" % [int(time) / 60, int(time) % 60, player.level, kills]
 	menu.open("살아남았다!" if won else "쓰러졌다...", body, [["restart", "다시 하기"], ["quit", "게임 종료"]])
@@ -195,6 +264,7 @@ func _on_menu_button(id: String) -> void:
 			menu.close()
 		"restart":
 			get_tree().paused = false
+			Engine.time_scale = 1.0
 			get_tree().reload_current_scene()
 		"quit":
 			get_tree().quit()

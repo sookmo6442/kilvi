@@ -18,6 +18,17 @@ var behavior := "chase"
 var dead := false
 var slow_time := 0.0
 
+## 암살 표식: 쿠나이에 맞을 때마다 1개. mark_limit개가 되면 즉시 처형.
+var marks := 0
+var mark_limit := 3
+var executed := false
+
+## 표적 의뢰 대상(엘리트). 제한 시간 안에 못 잡으면 도망간다.
+var is_target := false
+var target_time_left := 0.0
+var escaped := false
+var size_mult := 1.0
+
 var _knock := Vector2.ZERO
 var _flash := 0.0
 var _t := 0.0
@@ -26,7 +37,7 @@ var _charge_dir := Vector2.ZERO
 var _charging := 0.0
 
 
-func setup(id: String, p: Player, hp_mult: float) -> void:
+func setup(id: String, p: Player, hp_mult: float, target: bool = false, target_time: float = 30.0) -> void:
 	var d: Dictionary = GameData.ENEMIES[id]
 	type_id = id
 	player = p
@@ -40,6 +51,15 @@ func setup(id: String, p: Player, hp_mult: float) -> void:
 	behavior = d.behavior
 	_charge_timer = randf_range(1.5, 3.0)
 	_t = randf() * 10.0
+	if target:
+		is_target = true
+		target_time_left = target_time
+		max_hp *= 12.0
+		hp = max_hp
+		damage *= 1.5
+		xp_value = 10
+		size_mult = 1.7
+		mark_limit = 6
 
 
 func _ready() -> void:
@@ -60,9 +80,17 @@ func _physics_process(delta: float) -> void:
 		return
 	_t += delta
 	slow_time = maxf(slow_time - delta, 0.0)
+	if is_target:
+		target_time_left -= delta
+		if target_time_left <= 0.0:
+			_escape()
+			return
+	# 은신 중이면 킬비가 마지막으로 보였던 자리로 간다
+	var to_goal := player.chase_position() - global_position
+	var goal_dist := to_goal.length()
+	var dir := to_goal / goal_dist if goal_dist > 2.0 else Vector2.ZERO
 	var to_player := player.global_position - global_position
 	var dist := to_player.length()
-	var dir := to_player / dist if dist > 0.01 else Vector2.ZERO
 	var spd := speed * (0.5 if slow_time > 0.0 else 1.0)
 
 	if behavior == "charge":
@@ -79,7 +107,7 @@ func _physics_process(delta: float) -> void:
 	position += dir * spd * delta + _knock * delta
 	_knock = _knock.move_toward(Vector2.ZERO, 900.0 * delta)
 
-	if dist < radius + Player.HIT_RADIUS:
+	if dist < radius * size_mult + Player.HIT_RADIUS:
 		player.take_damage(damage)
 
 	if _flash > 0.0:
@@ -88,7 +116,7 @@ func _physics_process(delta: float) -> void:
 			queue_redraw()
 	# 좌우 방향 + 살랑임
 	var flip := -1.0 if to_player.x < 0.0 else 1.0
-	scale = Vector2(flip, 1.0 + sin(_t * 8.0) * 0.06)
+	scale = Vector2(flip, 1.0 + sin(_t * 8.0) * 0.06) * size_mult
 
 
 func take_damage(amount: float, knockback: Vector2 = Vector2.ZERO) -> void:
@@ -104,7 +132,30 @@ func take_damage(amount: float, knockback: Vector2 = Vector2.ZERO) -> void:
 		queue_free()
 
 
+func add_mark() -> void:
+	if dead:
+		return
+	marks += 1
+	if marks >= mark_limit:
+		executed = true
+		take_damage(hp + 1.0)
+	else:
+		queue_redraw()
+
+
+func _escape() -> void:
+	# 표적이 연기와 함께 사라진다
+	dead = true
+	escaped = true
+	var puff := preload("res://scripts/effects/smoke_puff.gd").new()
+	puff.position = global_position
+	get_parent().add_child(puff)
+	killed.emit(self)
+	queue_free()
+
+
 func _draw() -> void:
+	_draw_marks()
 	var c := Color.WHITE if _flash > 0.0 else color
 	if type_id == "wisp":
 		draw_circle(Vector2.ZERO, radius, c)
@@ -121,3 +172,22 @@ func _draw() -> void:
 		draw_circle(Vector2(3, -1), 4.0, Color(0.95, 0.93, 0.88))
 		draw_line(Vector2(1, -2), Vector2(3, -2), Color.RED, 1.0)
 		draw_line(Vector2(4, -2), Vector2(6, -2), Color.RED, 1.0)
+
+
+func _draw_marks() -> void:
+	# 크기 배율을 되돌려서 표식을 원래 크기로 그린다 (모양이 좌우 대칭이라 반전은 무시)
+	var inv := Vector2.ONE / size_mult
+	if is_target:
+		# 머리 위 붉은 표적 표시
+		var top := Vector2(0, -radius - 12)
+		draw_set_transform(top, 0.0, inv)
+		draw_arc(Vector2.ZERO, 5.0, 0, TAU, 16, Color(1.0, 0.2, 0.15), 1.5)
+		draw_line(Vector2(-7, 0), Vector2(7, 0), Color(1.0, 0.2, 0.15), 1.0)
+		draw_line(Vector2(0, -7), Vector2(0, 7), Color(1.0, 0.2, 0.15), 1.0)
+	if marks > 0:
+		draw_set_transform(Vector2(0, radius + 5), 0.0, inv)
+		var w := mark_limit * 4.0
+		for i in mark_limit:
+			var c := Color(1.0, 0.25, 0.2) if i < marks else Color(0, 0, 0, 0.35)
+			draw_rect(Rect2(-w / 2.0 + i * 4.0, 0, 3, 3), c)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

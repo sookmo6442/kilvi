@@ -15,6 +15,11 @@ func fire() -> void:
 	pass
 
 
+## false면 쿨타임이 끝나도 쏘지 않고 기다린다.
+func can_fire() -> bool:
+	return true
+
+
 func level_up() -> void:
 	level += 1
 
@@ -23,7 +28,7 @@ func _physics_process(delta: float) -> void:
 	if player == null or player.is_dead:
 		return
 	_cooldown_left -= delta
-	if _cooldown_left <= 0.0:
+	if _cooldown_left <= 0.0 and can_fire():
 		_cooldown_left = get_cooldown()
 		fire()
 

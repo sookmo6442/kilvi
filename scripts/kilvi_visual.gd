@@ -11,6 +11,8 @@ var moving := false
 var dashing := false
 var invulnerable := false
 var dead := false
+var stealthed := false
+var ambush := false
 var base_scale := 1.0
 
 var _t := 0.0
@@ -18,6 +20,11 @@ var _t := 0.0
 
 func _process(delta: float) -> void:
 	_t += delta
+	if stealthed:
+		modulate = Color(0.5, 0.5, 0.7, 0.3)
+		queue_redraw()
+		return
+	modulate = Color.WHITE
 	if invulnerable:
 		modulate.a = 0.35 if int(_t * 20.0) % 2 == 0 else 1.0
 	elif dashing:
@@ -59,6 +66,9 @@ func _draw() -> void:
 		Vector2(-6, -17), Vector2(-3, -23), Vector2(-1, -18)]), HOOD)
 	# 얼굴(그림자)
 	draw_circle(Vector2(1.5, -12.5), 5.0, BLACK)
-	# 주황 눈
-	draw_rect(Rect2(0, -14, 2, 3), EYE)
-	draw_rect(Rect2(4, -14, 2, 3), EYE)
+	# 주황 눈 (기습 준비 상태면 붉게 빛난다)
+	var eye := Color(1.0, 0.2, 0.15) if ambush else EYE
+	draw_rect(Rect2(0, -14, 2, 3), eye)
+	draw_rect(Rect2(4, -14, 2, 3), eye)
+	if ambush and not stealthed:
+		draw_circle(Vector2(3, -12.5), 6.0 + sin(_t * 12.0), Color(1.0, 0.2, 0.15, 0.18))

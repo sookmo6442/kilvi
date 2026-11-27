@@ -19,6 +19,8 @@ const DASH_TIME := 0.12
 const DASH_COOLDOWN := 3.0
 const INVULN_TIME := 0.5
 const HIT_RADIUS := 8.0
+const STEALTH_TIME := 1.5
+const AMBUSH_MULT := 3.0
 
 var world: Node2D
 
@@ -48,6 +50,12 @@ var move_dir := Vector2.ZERO
 var dash_cooldown_left := 0.0
 var is_dead := false
 
+## 그림자 은신: 대시하면 잠깐 사라지고, 적은 마지막으로 본 위치를 쫓는다.
+var stealth_left := 0.0
+var last_seen_position := Vector2.ZERO
+## 은신이 끝난 뒤 첫 쿠나이 공격이 치명타가 된다.
+var ambush_ready := false
+
 var _invuln := 0.0
 var _dash_time := 0.0
 var _dash_dir := Vector2.ZERO
@@ -66,6 +74,10 @@ func _physics_process(delta: float) -> void:
 		return
 	_invuln = maxf(_invuln - delta, 0.0)
 	dash_cooldown_left = maxf(dash_cooldown_left - delta, 0.0)
+	if stealth_left > 0.0:
+		stealth_left = maxf(stealth_left - delta, 0.0)
+	else:
+		last_seen_position = global_position
 
 	move_dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if move_dir != Vector2.ZERO:
@@ -81,7 +93,9 @@ func _physics_process(delta: float) -> void:
 
 	_visual.moving = move_dir != Vector2.ZERO
 	_visual.dashing = _dash_time > 0.0
-	_visual.invulnerable = _invuln > 0.0 and _dash_time <= 0.0
+	_visual.invulnerable = _invuln > 0.0 and _dash_time <= 0.0 and stealth_left <= 0.0
+	_visual.stealthed = stealth_left > 0.0
+	_visual.ambush = ambush_ready
 	if absf(facing.x) > 0.01:
 		_visual.scale = Vector2(signf(facing.x), 1.0) * _visual.base_scale
 
@@ -91,10 +105,30 @@ func _start_dash() -> void:
 	_dash_time = DASH_TIME
 	dash_cooldown_left = DASH_COOLDOWN
 	_invuln = maxf(_invuln, DASH_TIME + 0.1)
+	last_seen_position = global_position
+	stealth_left = STEALTH_TIME
+	ambush_ready = true
 	if world:
 		var puff := preload("res://scripts/effects/smoke_puff.gd").new()
 		puff.position = position
 		world.add_child(puff)
+
+
+func is_stealthed() -> bool:
+	return stealth_left > 0.0
+
+
+## 적이 쫓아갈 위치. 은신 중에는 마지막으로 본 자리.
+func chase_position() -> Vector2:
+	return last_seen_position if stealth_left > 0.0 else global_position
+
+
+## 기습 치명타를 한 번 꺼내 쓴다. 준비돼 있으면 배율, 아니면 1.
+func consume_ambush() -> float:
+	if ambush_ready and stealth_left <= 0.0:
+		ambush_ready = false
+		return AMBUSH_MULT
+	return 1.0
 
 
 func pickup_range() -> float:
@@ -116,6 +150,11 @@ func take_damage(amount: float) -> void:
 func heal(amount: float) -> void:
 	hp = minf(hp + amount, max_hp)
 	hp_changed.emit(hp, max_hp)
+
+
+func grant_levelups(count: int) -> void:
+	pending_levelups += count
+	leveled_up.emit()
 
 
 func add_xp(amount: int) -> void:
