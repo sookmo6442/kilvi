@@ -22,6 +22,14 @@ const PASSIVES := {
 	"ears": {"name": "긴 귀", "desc": "획득 범위 +25%", "max_level": 5},
 }
 
+## 특수 스킬: 판 시작 전에 1개만 골라 들고 간다.
+const SKILLS := {
+	"stealth": {"name": "그림자 은신", "key": "Q", "cooldown": 20.0,
+		"desc": "2초간 사라진다. 적은 마지막 자리로 몰리고,\n   은신 후 첫 쿠나이는 3배 치명타."},
+	"log": {"name": "통나무 둔갑", "key": "자동", "cooldown": 25.0,
+		"desc": "맞는 순간 통나무를 남기고 빈자리로 이동.\n   통나무는 적을 2초간 모은 뒤 터진다."},
+}
+
 const ENEMIES := {
 	"wisp": {"name": "도깨비불", "hp": 4.0, "speed": 38.0, "damage": 5.0, "radius": 7.0, "xp": 1,
 		"color": Color(0.55, 0.8, 1.0), "behavior": "chase"},

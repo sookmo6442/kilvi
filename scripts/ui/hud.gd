@@ -8,6 +8,8 @@ var _level_label: Label
 var _time_label: Label
 var _kills_label: Label
 var _contract_label: Label
+var _skill_label: Label
+var _skill_bar: ProgressBar
 var _message_label: Label
 var _message_left := 0.0
 
@@ -69,6 +71,19 @@ func _ready() -> void:
 	_dash_bar.size = Vector2(90, 3)
 	root.add_child(_dash_bar)
 
+	# 왼쪽 아래: 특수 스킬
+	_skill_label = Label.new()
+	_skill_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_skill_label.position = Vector2(6, -30)
+	root.add_child(_skill_label)
+	_skill_bar = UiStyle.bar(UiStyle.ORANGE, 4)
+	_skill_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_skill_bar.position = Vector2(6, -10)
+	_skill_bar.size = Vector2(110, 4)
+	root.add_child(_skill_bar)
+	_skill_label.visible = false
+	_skill_bar.visible = false
+
 	set_time(0.0)
 	set_kills(0)
 	set_hp(1, 1)
@@ -79,6 +94,30 @@ func _process(delta: float) -> void:
 	if _message_left > 0.0:
 		_message_left -= delta
 		_message_label.modulate.a = clampf(_message_left / 0.4, 0.0, 1.0)
+
+
+var _skill_name := ""
+var _skill_key := ""
+
+
+func setup_skill(skill_name: String, key: String) -> void:
+	_skill_name = skill_name
+	_skill_key = key
+	_skill_label.visible = true
+	_skill_bar.visible = true
+
+
+func set_skill(left: float, total: float) -> void:
+	if _skill_name == "":
+		return
+	_skill_bar.max_value = total
+	_skill_bar.value = total - left
+	if left > 0.0:
+		_skill_label.text = "[%s] %s  %d초" % [_skill_key, _skill_name, ceili(left)]
+		_skill_label.modulate = Color(0.7, 0.7, 0.7)
+	else:
+		_skill_label.text = "[%s] %s  준비" % [_skill_key, _skill_name]
+		_skill_label.modulate = Color.WHITE
 
 
 func set_contract(text: String) -> void:

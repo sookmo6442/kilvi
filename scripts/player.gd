@@ -16,10 +16,10 @@ const WEAPON_SCRIPTS := {
 
 const DASH_DISTANCE := 64.0
 const DASH_TIME := 0.12
-const DASH_COOLDOWN := 3.0
+const DASH_COOLDOWN := 2.0
 const INVULN_TIME := 0.5
 const HIT_RADIUS := 8.0
-const STEALTH_TIME := 1.5
+const STEALTH_TIME := 2.0
 const AMBUSH_MULT := 3.0
 
 var world: Node2D
@@ -56,6 +56,12 @@ var last_seen_position := Vector2.ZERO
 ## 은신이 끝난 뒤 첫 쿠나이 공격이 치명타가 된다.
 var ambush_ready := false
 
+## 특수 스킬: 판마다 1개. GameData.SKILLS의 id.
+var skill_id := ""
+var skill_cooldown_left := 0.0
+## 통나무 둔갑으로 남긴 통나무. 살아 있는 동안 적이 이쪽으로 몰려간다.
+var decoy: Node2D = null
+
 var _invuln := 0.0
 var _dash_time := 0.0
 var _dash_dir := Vector2.ZERO
@@ -74,10 +80,13 @@ func _physics_process(delta: float) -> void:
 		return
 	_invuln = maxf(_invuln - delta, 0.0)
 	dash_cooldown_left = maxf(dash_cooldown_left - delta, 0.0)
+	skill_cooldown_left = maxf(skill_cooldown_left - delta, 0.0)
 	if stealth_left > 0.0:
 		stealth_left = maxf(stealth_left - delta, 0.0)
 	else:
 		last_seen_position = global_position
+	if Input.is_action_just_pressed("skill"):
+		use_skill()
 
 	move_dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if move_dir != Vector2.ZERO:
@@ -105,21 +114,74 @@ func _start_dash() -> void:
 	_dash_time = DASH_TIME
 	dash_cooldown_left = DASH_COOLDOWN
 	_invuln = maxf(_invuln, DASH_TIME + 0.1)
-	last_seen_position = global_position
-	stealth_left = STEALTH_TIME
-	ambush_ready = true
+	_spawn_puff(position)
+
+
+func _spawn_puff(at: Vector2) -> void:
 	if world:
 		var puff := preload("res://scripts/effects/smoke_puff.gd").new()
-		puff.position = position
+		puff.position = at
 		world.add_child(puff)
+
+
+func skill_cooldown() -> float:
+	return GameData.SKILLS[skill_id].cooldown if skill_id != "" else 1.0
+
+
+## Q 키로 쓰는 스킬. 자동 스킬(통나무 둔갑)은 여기서 아무것도 하지 않는다.
+func use_skill() -> void:
+	if is_dead or skill_id == "" or skill_cooldown_left > 0.0:
+		return
+	if skill_id == "stealth":
+		skill_cooldown_left = skill_cooldown()
+		last_seen_position = global_position
+		stealth_left = STEALTH_TIME
+		ambush_ready = true
+		_spawn_puff(position)
+
+
+## 통나무 둔갑: 맞는 순간 통나무를 남기고 빈자리로 순간이동한다.
+func _try_substitution() -> bool:
+	if skill_id != "log" or skill_cooldown_left > 0.0:
+		return false
+	skill_cooldown_left = skill_cooldown()
+	var log_node: Node2D = preload("res://scripts/effects/log_decoy.gd").new()
+	log_node.position = position
+	log_node.player = self
+	world.add_child(log_node)
+	decoy = log_node
+	_spawn_puff(position)
+	position = _find_escape_spot()
+	_spawn_puff(position)
+	_invuln = 0.6
+	return true
+
+
+func _find_escape_spot() -> Vector2:
+	var enemies := get_tree().get_nodes_in_group("enemies")
+	var best := position
+	var best_score := INF
+	for i in 12:
+		var cand := position + Vector2.from_angle(randf() * TAU) * randf_range(80.0, 140.0)
+		var score := 0.0
+		for e in enemies:
+			var d: float = cand.distance_to(e.global_position)
+			if d < 60.0:
+				score += 60.0 - d
+		if score < best_score:
+			best_score = score
+			best = cand
+	return best
 
 
 func is_stealthed() -> bool:
 	return stealth_left > 0.0
 
 
-## 적이 쫓아갈 위치. 은신 중에는 마지막으로 본 자리.
+## 적이 쫓아갈 위치. 통나무가 있으면 통나무, 은신 중에는 마지막으로 본 자리.
 func chase_position() -> Vector2:
+	if decoy != null and is_instance_valid(decoy):
+		return decoy.global_position
 	return last_seen_position if stealth_left > 0.0 else global_position
 
 
@@ -137,6 +199,8 @@ func pickup_range() -> float:
 
 func take_damage(amount: float) -> void:
 	if is_dead or _invuln > 0.0:
+		return
+	if _try_substitution():
 		return
 	hp = maxf(hp - amount, 0.0)
 	_invuln = INVULN_TIME
