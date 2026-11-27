@@ -1,6 +1,8 @@
 extends Weapon
 ## 쿠나이: 가장 가까운 적에게 연달아 던진다.
 ## 레벨 2·4·6·8: 개수 +1 / 레벨 5·8: 관통 +1 / 매 레벨: 피해 증가, 쿨타임 감소
+## 맞힌 적에게 암살 표식을 남긴다. 은신 중에는 던지지 않고 기다렸다가,
+## 은신이 끝나면 기습 치명타(3배, 관통 +2)로 던진다.
 
 const KunaiProjectile := preload("res://scripts/weapons/kunai_projectile.gd")
 
@@ -21,7 +23,13 @@ func _pierce() -> int:
 	return 1 + (1 if level >= 5 else 0) + (1 if level >= 8 else 0)
 
 
+func can_fire() -> bool:
+	return not player.is_stealthed()
+
+
 func fire() -> void:
+	var ambush_mult := player.consume_ambush()
+	var crit := ambush_mult > 1.0
 	var target := nearest_enemy(320.0)
 	var base_dir := player.facing
 	for i in _count():
@@ -32,8 +40,9 @@ func fire() -> void:
 		var p := KunaiProjectile.new()
 		p.position = player.global_position
 		p.velocity = base_dir.rotated(randf_range(-0.08, 0.08)) * 300.0
-		p.damage = _damage()
-		p.pierce = _pierce()
+		p.damage = _damage() * ambush_mult
+		p.pierce = _pierce() + (2 if crit else 0)
+		p.crit = crit
 		p.life = 1.2 * player.duration
 		player.world.add_child(p)
 		if i < _count() - 1:

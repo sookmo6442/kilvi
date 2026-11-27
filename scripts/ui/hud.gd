@@ -7,6 +7,9 @@ var _dash_bar: ProgressBar
 var _level_label: Label
 var _time_label: Label
 var _kills_label: Label
+var _contract_label: Label
+var _message_label: Label
+var _message_left := 0.0
 
 
 func _ready() -> void:
@@ -38,6 +41,24 @@ func _ready() -> void:
 	_kills_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	root.add_child(_kills_label)
 
+	_contract_label = Label.new()
+	_contract_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_contract_label.position = Vector2(-80, 24)
+	_contract_label.custom_minimum_size = Vector2(160, 0)
+	_contract_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_contract_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3))
+	root.add_child(_contract_label)
+
+	_message_label = Label.new()
+	_message_label.set_anchors_preset(Control.PRESET_CENTER)
+	_message_label.position = Vector2(-120, -70)
+	_message_label.custom_minimum_size = Vector2(240, 0)
+	_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_message_label.add_theme_color_override("font_color", UiStyle.ORANGE)
+	_message_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_message_label.add_theme_constant_override("outline_size", 4)
+	root.add_child(_message_label)
+
 	_hp_bar = UiStyle.bar(Color(0.85, 0.2, 0.25), 5)
 	_hp_bar.position = Vector2(6, 26)
 	_hp_bar.size = Vector2(90, 5)
@@ -52,6 +73,22 @@ func _ready() -> void:
 	set_kills(0)
 	set_hp(1, 1)
 	set_xp(0, 1, 1)
+
+
+func _process(delta: float) -> void:
+	if _message_left > 0.0:
+		_message_left -= delta
+		_message_label.modulate.a = clampf(_message_left / 0.4, 0.0, 1.0)
+
+
+func set_contract(text: String) -> void:
+	_contract_label.text = text
+
+
+func flash_message(text: String) -> void:
+	_message_label.text = text
+	_message_left = 1.6
+	_message_label.modulate.a = 1.0
 
 
 func set_xp(xp: int, needed: int, level: int) -> void:
