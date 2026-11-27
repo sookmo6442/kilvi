@@ -4,6 +4,26 @@ extends Weapon
 
 const Cloud := preload("res://scripts/weapons/smoke_cloud.gd")
 
+var _mist: Area2D = null
+
+
+func evolve() -> void:
+	super.evolve()
+	# 그림자 안개: 킬비를 따라다니는 영구 안개. 안에 있는 적에게 표식을 새긴다.
+	_mist = Cloud.new()
+	_mist.permanent = true
+	_mist.marks = true
+	_mist.dark = true
+	_mist.radius = 60.0
+	add_child(_mist)
+
+
+func _physics_process(delta: float) -> void:
+	super._physics_process(delta)
+	if _mist and player:
+		_mist.set_radius(60.0 * player.area)
+		_mist.damage = (3.0 + 1.0 * (level - 1)) * player.might
+
 
 func get_cooldown() -> float:
 	return 3.0 - 0.15 * (level - 1)

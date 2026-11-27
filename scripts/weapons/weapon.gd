@@ -4,6 +4,7 @@ extends Node2D
 
 var player: Player
 var level := 1
+var evolved := false
 var _cooldown_left := 0.3
 
 
@@ -22,6 +23,10 @@ func can_fire() -> bool:
 
 func level_up() -> void:
 	level += 1
+
+
+func evolve() -> void:
+	evolved = true
 
 
 func _physics_process(delta: float) -> void:

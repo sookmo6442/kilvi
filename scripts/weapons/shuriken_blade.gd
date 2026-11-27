@@ -2,6 +2,7 @@ extends Area2D
 ## 표창 칼날 하나. 같은 적은 0.4초에 한 번만 때린다.
 
 var damage := 4.0
+var evolved := false
 var _last_hit := {} # instance_id -> 시각
 var _spin := 0.0
 
@@ -41,5 +42,5 @@ func _draw() -> void:
 	for i in 8:
 		var r := 7.0 if i % 2 == 0 else 2.5
 		pts.append(Vector2.from_angle(_spin + TAU * i / 8.0) * r)
-	draw_colored_polygon(pts, Color(0.8, 0.82, 0.88))
+	draw_colored_polygon(pts, Color(1.0, 0.45, 0.2) if evolved else Color(0.8, 0.82, 0.88))
 	draw_circle(Vector2.ZERO, 1.2, Color(0.15, 0.15, 0.18))

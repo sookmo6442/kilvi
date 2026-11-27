@@ -8,7 +8,8 @@ const KunaiProjectile := preload("res://scripts/weapons/kunai_projectile.gd")
 
 
 func get_cooldown() -> float:
-	return 0.8 * (1.0 - 0.04 * (level - 1))
+	var cd := 0.8 * (1.0 - 0.04 * (level - 1))
+	return cd * 0.7 if evolved else cd
 
 
 func _count() -> int:
@@ -16,7 +17,7 @@ func _count() -> int:
 
 
 func _damage() -> float:
-	return (6.0 + 2.0 * (level - 1)) * player.might
+	return (6.0 + 2.0 * (level - 1)) * player.might * (1.5 if evolved else 1.0)
 
 
 func _pierce() -> int:
@@ -30,6 +31,8 @@ func can_fire() -> bool:
 func fire() -> void:
 	var ambush_mult := player.consume_ambush()
 	var crit := ambush_mult > 1.0
+	if evolved:
+		_storm_burst(ambush_mult, crit)
 	var target := nearest_enemy(320.0)
 	var base_dir := player.facing
 	for i in _count():
@@ -46,6 +49,24 @@ func fire() -> void:
 		p.life = 1.2 * player.duration
 		player.world.add_child(p)
 		if i < _count() - 1:
-			await get_tree().create_timer(0.07, false).timeout
+			await get_tree().create_timer(0.04 if evolved else 0.07, false).timeout
 			if not is_instance_valid(self):
 				return
+
+
+## 쿠나이 폭풍: 8방향(+투사체 보너스)으로 한 번에 퍼붓는다.
+var _storm_angle := 0.0
+
+
+func _storm_burst(mult: float, crit: bool) -> void:
+	var n := 8 + player.extra_projectiles * 2
+	_storm_angle += 0.3
+	for i in n:
+		var p := KunaiProjectile.new()
+		p.position = player.global_position
+		p.velocity = Vector2.from_angle(_storm_angle + TAU * i / n) * 260.0
+		p.damage = _damage() * 0.6 * mult
+		p.pierce = 2 + (2 if crit else 0)
+		p.crit = crit
+		p.life = 0.9 * player.duration
+		player.world.add_child(p)
