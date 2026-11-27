@@ -5,7 +5,8 @@ extends RefCounted
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 3
 const MAX_PASSIVES := 6
-const MAX_ENEMIES := 350
+const VERSION := "0.6"
+const MAX_ENEMIES := 500
 
 const WEAPONS := {
 	"kunai": {"name": "쿠나이", "desc": "가장 가까운 적에게 쿠나이를 던진다.", "max_level": 8},
@@ -47,28 +48,37 @@ const ENEMIES := {
 		"color": Color(0.2, 0.2, 0.28), "behavior": "ranged"},
 	"turtle": {"name": "돌 거북", "hp": 70.0, "speed": 22.0, "damage": 12.0, "radius": 12.0, "xp": 6,
 		"color": Color(0.5, 0.55, 0.5), "behavior": "tank"},
+	"bat": {"name": "박쥐 떼", "hp": 3.0, "speed": 80.0, "damage": 4.0, "radius": 5.0, "xp": 1,
+		"color": Color(0.35, 0.2, 0.4), "behavior": "swarm", "pack": 6},
+	"imp": {"name": "작은 도깨비", "hp": 22.0, "speed": 45.0, "damage": 9.0, "radius": 9.0, "xp": 3,
+		"color": Color(0.75, 0.3, 0.3), "behavior": "chase", "split": "wisp"},
+	"ninja": {"name": "그림자 닌자", "hp": 30.0, "speed": 55.0, "damage": 10.0, "radius": 8.0, "xp": 5,
+		"color": Color(0.12, 0.12, 0.16), "behavior": "ninja"},
 }
 
 ## 시간대별 등장 비율. [시작 초, {적: 가중치}] — 해당 시각 이후 가장 마지막 항목을 쓴다.
 const SPAWN_TABLE := [
-	[0.0, {"wisp": 1.0}],
-	[180.0, {"wisp": 0.7, "fox": 0.3}],
-	[420.0, {"wisp": 0.5, "fox": 0.3, "crow": 0.2}],
-	[720.0, {"wisp": 0.35, "fox": 0.3, "crow": 0.2, "turtle": 0.15}],
-	[1020.0, {"wisp": 0.25, "fox": 0.3, "crow": 0.25, "turtle": 0.2}],
+	[0.0, {"wisp": 0.75, "bat": 0.25}],
+	[60.0, {"wisp": 0.5, "bat": 0.25, "fox": 0.25}],
+	[150.0, {"wisp": 0.35, "bat": 0.2, "fox": 0.25, "imp": 0.2}],
+	[240.0, {"wisp": 0.3, "bat": 0.2, "fox": 0.2, "imp": 0.15, "crow": 0.15}],
+	[360.0, {"wisp": 0.25, "bat": 0.15, "fox": 0.2, "imp": 0.15, "crow": 0.15, "ninja": 0.1}],
+	[540.0, {"wisp": 0.2, "bat": 0.15, "fox": 0.15, "imp": 0.15, "crow": 0.15, "ninja": 0.1, "turtle": 0.1}],
+	[900.0, {"wisp": 0.15, "bat": 0.15, "fox": 0.15, "imp": 0.15, "crow": 0.15, "ninja": 0.15, "turtle": 0.1}],
 ]
 
 ## 보스. time초에 등장. mark_limit만큼 표식이 쌓이면 그로기.
 const BOSSES := [
-	{"id": "big_goblin", "time": 300.0, "name": "큰 도깨비", "hp": 180.0, "speed": 32.0, "damage": 15.0,
+	{"id": "big_goblin", "time": 120.0, "name": "큰 도깨비", "hp": 400.0, "speed": 32.0, "damage": 15.0,
 		"radius": 18.0, "mark_limit": 12, "color": Color(0.85, 0.3, 0.3)},
-	{"id": "gumiho", "time": 600.0, "name": "구미호", "hp": 550.0, "speed": 42.0, "damage": 18.0,
+	{"id": "gumiho", "time": 420.0, "name": "구미호", "hp": 1500.0, "speed": 42.0, "damage": 18.0,
 		"radius": 16.0, "mark_limit": 16, "color": Color(1.0, 0.85, 0.6)},
-	{"id": "great_crow", "time": 900.0, "name": "대까마귀", "hp": 1100.0, "speed": 55.0, "damage": 20.0,
+	{"id": "great_crow", "time": 720.0, "name": "대까마귀", "hp": 3000.0, "speed": 55.0, "damage": 20.0,
 		"radius": 18.0, "mark_limit": 20, "color": Color(0.15, 0.12, 0.2)},
-	{"id": "moon_hunter", "time": 1200.0, "name": "달의 사냥꾼", "hp": 3000.0, "speed": 70.0, "damage": 25.0,
+	{"id": "moon_hunter", "time": 1200.0, "name": "달의 사냥꾼", "hp": 8000.0, "speed": 70.0, "damage": 25.0,
 		"radius": 14.0, "mark_limit": 25, "color": Color(0.9, 0.9, 1.0), "final": true},
 ]
 
 static func xp_for_level(level: int) -> int:
-	return 5 + (level - 1) * 7
+	var n := level - 1
+	return int(5 + n * 10 + n * n * 0.6)

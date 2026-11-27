@@ -13,7 +13,7 @@ const SlashScript := preload("res://scripts/effects/slash.gd")
 const ChestScript := preload("res://scripts/treasure_chest.gd")
 const BossScript := preload("res://scripts/boss.gd")
 const SEP_CELL := 16.0
-const RING_WAVES := [[150.0, "wisp"], [450.0, "fox"], [750.0, "wisp"], [1050.0, "fox"]]
+const RING_WAVES := [[90.0, "wisp"], [300.0, "bat"], [540.0, "fox"], [840.0, "imp"], [1080.0, "ninja"]]
 
 const CONTRACT_FIRST := 45.0 # 첫 표적 의뢰 시각(초)
 const CONTRACT_INTERVAL := 60.0
@@ -156,8 +156,8 @@ func _unhandled_input(event: InputEvent) -> void:
 # --- 스폰 ---------------------------------------------------------------
 
 func _update_spawns(delta: float) -> void:
-	# 초당 스폰 수: 시작 1마리 → 10분 약 9마리 → 20분 약 18마리. 보스전에는 절반.
-	var rate := 1.0 + time / 70.0
+	# 초당 스폰 수: 시작 2마리 → 10분 약 17마리 → 20분 약 32마리. 보스전에는 절반.
+	var rate := 2.0 + time / 40.0
 	if _boss != null:
 		rate *= 0.5
 	_spawn_acc += rate * delta
@@ -166,8 +166,12 @@ func _update_spawns(delta: float) -> void:
 		_spawn_acc -= 1.0
 		if alive >= GameData.MAX_ENEMIES:
 			continue
-		_spawn_enemy(_pick_enemy_type(), _random_edge_position())
-		alive += 1
+		var id := _pick_enemy_type()
+		var pos := _random_edge_position()
+		var pack: int = GameData.ENEMIES[id].get("pack", 1)
+		for k in pack:
+			_spawn_enemy(id, pos + Vector2(randf_range(-14, 14), randf_range(-14, 14)))
+		alive += pack
 
 	# 포위 웨이브: 킬비를 둥글게 둘러싼다
 	if _ring_index < RING_WAVES.size() and time >= RING_WAVES[_ring_index][0]:
@@ -194,7 +198,7 @@ func _pick_enemy_type() -> String:
 
 
 func _hp_mult() -> float:
-	return 1.0 + time / 200.0
+	return 1.0 + time / 120.0
 
 
 ## 보스가 졸개를 부를 때 쓴다.
@@ -329,6 +333,11 @@ func _on_enemy_killed(e: Enemy) -> void:
 		if not e.is_target:
 			post_fx.execution_flash(0.5)
 			_hitstop(0.04)
+	# 작은 도깨비는 죽으면 도깨비불 둘로 나뉜다
+	var split: String = GameData.ENEMIES.get(e.type_id, {}).get("split", "")
+	if split != "" and not e.executed:
+		for k in 2:
+			_spawn_enemy.call_deferred(split, e.global_position + Vector2.from_angle(randf() * TAU) * 10.0)
 	kills += 1
 	hud.set_kills(kills)
 	var gem: Node2D = GemScript.new()

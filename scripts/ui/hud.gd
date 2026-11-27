@@ -106,6 +106,15 @@ func _ready() -> void:
 	_skill_label.visible = false
 	_skill_bar.visible = false
 
+	var ver := Label.new()
+	ver.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver.position = Vector2(-60, -18)
+	ver.custom_minimum_size = Vector2(54, 0)
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ver.modulate = Color(1, 1, 1, 0.4)
+	ver.text = "v" + GameData.VERSION
+	root.add_child(ver)
+
 	set_time(0.0)
 	set_kills(0)
 	set_hp(1, 1)
