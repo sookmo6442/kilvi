@@ -14,12 +14,20 @@ const WEAPONS := {
 }
 
 const PASSIVES := {
-	"wraps": {"name": "손목 붕대", "desc": "투사체 +1", "max_level": 3},
-	"fur": {"name": "검은 털", "desc": "공격 범위 +10%", "max_level": 5},
-	"collar": {"name": "스파이크 목걸이", "desc": "지속시간 +15%", "max_level": 5},
+	"wraps": {"name": "손목 붕대", "desc": "투사체 +1  (쿠나이 진화 재료)", "max_level": 5},
+	"fur": {"name": "검은 털", "desc": "공격 범위 +10%  (표창 진화 재료)", "max_level": 5},
+	"collar": {"name": "스파이크 목걸이", "desc": "지속시간 +15%  (연기탄 진화 재료)", "max_level": 5},
 	"charm": {"name": "주황 부적", "desc": "공격력 +10%", "max_level": 5},
 	"legs": {"name": "단련된 다리", "desc": "이동 속도 +8%", "max_level": 5},
 	"ears": {"name": "긴 귀", "desc": "획득 범위 +25%", "max_level": 5},
+}
+
+## 진화: 무기가 최대 레벨이고 짝 패시브를 1레벨 이상 갖고 있으면
+## 다음 보물 상자에서 진화한다.
+const EVOLUTIONS := {
+	"kunai": {"passive": "wraps", "name": "쿠나이 폭풍", "desc": "조준 사격과 함께 사방으로 쿠나이를 퍼붓는다."},
+	"shuriken": {"passive": "fur", "name": "혼돈의 고리", "desc": "안팎 두 겹의 고리가 서로 반대로 돈다."},
+	"smoke": {"passive": "collar", "name": "그림자 안개", "desc": "킬비를 따라다니는 안개가 적에게 표식을 새긴다."},
 }
 
 ## 특수 스킬: 판 시작 전에 1개만 골라 들고 간다.

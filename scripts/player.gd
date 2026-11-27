@@ -6,6 +6,7 @@ signal died
 signal leveled_up
 signal hp_changed(hp: float, max_hp: float)
 signal xp_changed(xp: int, xp_needed: int, level: int)
+signal weapon_evolved(weapon_id: String)
 
 const KilviVisual := preload("res://scripts/kilvi_visual.gd")
 const WEAPON_SCRIPTS := {
@@ -253,6 +254,23 @@ func add_or_level_weapon(id: String) -> void:
 	w.player = self
 	weapons[id] = w
 	add_child(w)
+
+
+## 진화할 수 있는 무기 id. 없으면 "".
+func evolvable_weapon() -> String:
+	for id in weapons:
+		var w: Weapon = weapons[id]
+		var evo: Dictionary = GameData.EVOLUTIONS.get(id, {})
+		if evo.is_empty() or w.evolved:
+			continue
+		if w.level >= GameData.WEAPONS[id].max_level and passive_level(evo.passive) > 0:
+			return id
+	return ""
+
+
+func evolve_weapon(id: String) -> void:
+	weapons[id].evolve()
+	weapon_evolved.emit(id)
 
 
 func add_passive(id: String) -> void:

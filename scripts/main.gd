@@ -72,6 +72,7 @@ func _ready() -> void:
 	player.xp_changed.connect(hud.set_xp)
 	player.leveled_up.connect(_on_leveled_up)
 	player.died.connect(_on_player_died)
+	player.weapon_evolved.connect(_on_weapon_evolved)
 	level_up_ui.chosen.connect(_on_upgrade_chosen)
 	menu.button_pressed.connect(_on_menu_button)
 
@@ -181,6 +182,12 @@ func _on_contract_done(success: bool, pos: Vector2) -> void:
 		hud.flash_message("표적이 도망쳤다")
 
 
+func _on_weapon_evolved(id: String) -> void:
+	hud.flash_message("진화! %s" % GameData.EVOLUTIONS[id].name)
+	post_fx.execution_flash(1.0)
+	_hitstop(0.15)
+
+
 func _hitstop(duration: float) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - _last_hitstop < 0.25:
@@ -234,7 +241,11 @@ func _roll_options() -> Array:
 		if lv == 0 and player.weapons.size() < GameData.MAX_WEAPONS:
 			pool.append({"kind": "weapon", "id": id, "label": "%s  [새 무기]\n   %s" % [d.name, d.desc]})
 		elif lv > 0 and lv < d.max_level:
-			pool.append({"kind": "weapon", "id": id, "label": "%s  Lv %d → %d\n   %s" % [d.name, lv, lv + 1, d.desc]})
+			var hint := ""
+			if lv + 1 == d.max_level:
+				var evo: Dictionary = GameData.EVOLUTIONS[id]
+				hint = "\n   (최대 레벨! %s가 있으면 보물 상자에서 진화)" % GameData.PASSIVES[evo.passive].name
+			pool.append({"kind": "weapon", "id": id, "label": "%s  Lv %d → %d\n   %s%s" % [d.name, lv, lv + 1, d.desc, hint]})
 	for id in GameData.PASSIVES:
 		var d: Dictionary = GameData.PASSIVES[id]
 		var lv := player.passive_level(id)

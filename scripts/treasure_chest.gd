@@ -1,5 +1,6 @@
 extends Node2D
-## 표적을 처치하면 떨어지는 보물 상자. 주우면 레벨업 1~3회.
+## 표적을 처치하면 떨어지는 보물 상자.
+## 진화할 수 있는 무기가 있으면 진화시키고, 없으면 레벨업 1~3회.
 
 var player: Player
 var _t := 0.0
@@ -9,8 +10,12 @@ func _physics_process(delta: float) -> void:
 	_t += delta
 	queue_redraw()
 	if player and not player.is_dead and global_position.distance_to(player.global_position) < 16.0:
-		var roll := randf()
-		player.grant_levelups(3 if roll < 0.1 else (2 if roll < 0.4 else 1))
+		var evo_id := player.evolvable_weapon()
+		if evo_id != "":
+			player.evolve_weapon(evo_id)
+		else:
+			var roll := randf()
+			player.grant_levelups(3 if roll < 0.1 else (2 if roll < 0.4 else 1))
 		queue_free()
 
 
