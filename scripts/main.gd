@@ -13,7 +13,7 @@ const SlashScript := preload("res://scripts/effects/slash.gd")
 const ChestScript := preload("res://scripts/treasure_chest.gd")
 const BossScript := preload("res://scripts/boss.gd")
 const SEP_CELL := 16.0
-const RING_WAVES := [[90.0, "wisp"], [300.0, "bat"], [540.0, "fox"], [840.0, "imp"], [1080.0, "ninja"]]
+const RING_WAVES := [[35.0, "wisp"], [90.0, "wisp"], [180.0, "bat"], [300.0, "bat"], [540.0, "fox"], [840.0, "imp"], [1080.0, "ninja"]]
 
 const BASE_SIZE := Vector2i(640, 360) # 게임 화면 해상도 (project.godot과 같게)
 const CONTRACT_FIRST := 45.0 # 첫 표적 의뢰 시각(초)
@@ -260,8 +260,8 @@ func _skill_sections() -> Array:
 # --- 스폰 ---------------------------------------------------------------
 
 func _update_spawns(delta: float) -> void:
-	# 초당 스폰 수: 시작 2마리 → 10분 약 17마리 → 20분 약 32마리. 보스전에는 절반.
-	var rate := 2.0 + time / 40.0
+	# 초당 스폰 수: 시작 3마리 → 10분 약 20마리 → 20분 약 37마리. 보스전에는 절반.
+	var rate := 3.0 + time / 35.0
 	if _boss != null:
 		rate *= 0.5
 	_spawn_acc += rate * delta
@@ -281,6 +281,7 @@ func _update_spawns(delta: float) -> void:
 	if _ring_index < RING_WAVES.size() and time >= RING_WAVES[_ring_index][0]:
 		var id: String = RING_WAVES[_ring_index][1]
 		_ring_index += 1
+		hud.flash_message("포위당했다!")
 		for i in 32:
 			_spawn_enemy(id, player.global_position + Vector2.from_angle(TAU * i / 32.0) * 220.0)
 

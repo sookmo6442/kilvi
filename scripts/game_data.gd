@@ -5,7 +5,7 @@ extends RefCounted
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 6
 const MAX_PASSIVES := 6
-const VERSION := "0.15"
+const VERSION := "0.16"
 const MAX_ENEMIES := 500
 
 ## 갈래: 체술(쿠나이를 쥐고 베기), 비술(닌자 도구), 인술(속성 술법).
@@ -74,7 +74,7 @@ const FLASH := {"dash_distance": 90.0, "dash_time": 0.14, "damage": 25.0, "boss_
 	"wave_speed": 480.0, "wave_life": 0.45, "wave_radius": 22.0}
 
 const ENEMIES := {
-	"wisp": {"name": "도깨비불", "hp": 4.0, "speed": 38.0, "damage": 5.0, "radius": 7.0, "xp": 1,
+	"wisp": {"name": "도깨비불", "hp": 4.0, "speed": 48.0, "damage": 5.0, "radius": 7.0, "xp": 1,
 		"color": Color(0.55, 0.8, 1.0), "behavior": "chase"},
 	"fox": {"name": "여우 자객", "hp": 14.0, "speed": 62.0, "damage": 8.0, "radius": 9.0, "xp": 2,
 		"color": Color(0.95, 0.5, 0.2), "behavior": "charge"},
@@ -104,7 +104,7 @@ const SPAWN_TABLE := [
 
 ## 보스. time초에 등장. mark_limit만큼 표식이 쌓이면 그로기.
 const BOSSES := [
-	{"id": "big_goblin", "time": 120.0, "name": "큰 도깨비", "hp": 400.0, "speed": 32.0, "damage": 15.0,
+	{"id": "big_goblin", "time": 120.0, "name": "큰 도깨비", "hp": 650.0, "speed": 32.0, "damage": 15.0,
 		"radius": 18.0, "mark_limit": 12, "color": Color(0.85, 0.3, 0.3)},
 	{"id": "gumiho", "time": 420.0, "name": "구미호", "hp": 1500.0, "speed": 42.0, "damage": 18.0,
 		"radius": 16.0, "mark_limit": 16, "color": Color(1.0, 0.85, 0.6)},
