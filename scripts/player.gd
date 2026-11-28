@@ -16,8 +16,8 @@ const WEAPON_SCRIPTS := {
 	"smoke": preload("res://scripts/weapons/smoke.gd"),
 	"bomb": preload("res://scripts/weapons/bomb_shuriken.gd"),
 	"gale": preload("res://scripts/weapons/body_tech.gd"),
-	"leap": preload("res://scripts/weapons/body_tech.gd"),
-	"moon": preload("res://scripts/weapons/body_tech.gd"),
+	"burst": preload("res://scripts/weapons/body_tech.gd"),
+	"clone": preload("res://scripts/weapons/body_tech.gd"),
 	"fire": preload("res://scripts/weapons/fire_jutsu.gd"),
 	"water": preload("res://scripts/weapons/water_jutsu.gd"),
 	"thunder": preload("res://scripts/weapons/thunder_jutsu.gd"),
@@ -109,13 +109,16 @@ func _physics_process(delta: float) -> void:
 	if move_dir != Vector2.ZERO:
 		facing = move_dir.normalized()
 
-	if _air_left > 0.0:
-		_update_jump(delta)
-	elif _dash_time > 0.0:
+	_double_grace = maxf(_double_grace - delta, 0.0)
+	if _dash_time > 0.0:
 		_dash_time -= delta
 		position += _dash_dir * _dash_speed * delta
 		if _body_dash:
 			_update_body_dash(delta)
+		if _dash_time <= 0.0:
+			_double_grace = DOUBLE_GRACE
+		if Input.is_action_just_pressed("dash"):
+			_try_clone()
 	else:
 		position += move_dir * base_speed * speed_mult * delta
 		_handle_dash_input(delta)
@@ -131,7 +134,7 @@ func _physics_process(delta: float) -> void:
 
 func _body_dash_visible() -> bool:
 	# 체술을 하나라도 들면 대시 중에도 몸이 보이고 잔상이 남는다
-	return weapon_level("gale") > 0 or weapon_level("leap") > 0 or weapon_level("moon") > 0
+	return weapon_level("gale") > 0 or weapon_level("burst") > 0 or weapon_level("clone") > 0
 
 
 func _start_dash() -> void:
@@ -139,45 +142,44 @@ func _start_dash() -> void:
 	if dash_cooldown_left <= 0.0:
 		dash_cooldown_left = DASH_COOLDOWN
 	_dash_dir = facing
-	_dash_time = DASH_TIME
-	_dash_speed = DASH_DISTANCE / DASH_TIME
-	_invuln = maxf(_invuln, DASH_TIME + 0.1)
+	# 질풍 레벨이 오를수록 더 멀리 간다(시간은 조금만 늘려 더 빨라 보이게)
+	var mult := _body_tech("gale", "dash_mult") if weapon_level("gale") > 0 else 1.0
+	_dash_time = DASH_TIME * sqrt(mult)
+	_dash_speed = DASH_DISTANCE * mult / _dash_time
+	_invuln = maxf(_invuln, _dash_time + 0.1)
 	_body_dash = _body_dash_visible()
 	_gale_hit.clear()
 	_dash_start = position
 	_afterimage_t = 0.0
-	if weapon_level("leap") > 0:
-		_try_shadow_leap()
+	_clone_ready = weapon_level("clone") > 0
 	_spawn_puff(position)
 
 
 # --- 체술: 대시 버튼을 강화한다 ------------------------------------------
-# 질풍(gale): 대시가 지나간 길의 적을 벤다. 3·6레벨에 대시 충전 +1.
-# 그림자 도약(leap): 대시 방향 근처의 표식 있는 적 뒤로 순간이동해 벤다.
-# 월면 낙하(moon): 대시 버튼을 길게 눌렀다 떼면 뛰어올라, 공중에서 조종하다 내려찍는다.
-const JUMP_HOLD := 0.22
+# 질풍(gale): 대시가 지나간 길의 적을 베고, 끝에서 초승달 검기를 휘두른다.
+#   레벨마다 대시가 길어지고, 3·6레벨에 대시 충전 +1.
+# 잔영 폭발(burst): 대시가 끝나면 도착점이 터진다. 4·7레벨에는 지나온 잔영도 차례로 터진다.
+# 그림자 분신(clone): 대시 중(또는 끝난 직후 DOUBLE_GRACE초)에 한 번 더 누르면
+#   출발한 자리에 분신이 남아 적을 끌어모았다가 터진다. 대시 충전은 쓰지 않는다.
+const DOUBLE_GRACE := 0.15
 const Afterimage := preload("res://scripts/effects/afterimage.gd")
-const Shockwave := preload("res://scripts/effects/shockwave.gd")
 const GaleTrail := preload("res://scripts/effects/gale_trail.gd")
-const SlashFx := preload("res://scripts/effects/slash.gd")
+const SlashArc := preload("res://scripts/effects/slash_arc.gd")
+const BurstChain := preload("res://scripts/effects/burst_chain.gd")
+const ShadowClone := preload("res://scripts/effects/shadow_clone.gd")
 
 var dash_charges := 1
 var _body_dash := false
 var _gale_hit := {}
 var _dash_start := Vector2.ZERO
 var _afterimage_t := 0.0
-var _hold := -1.0 # 대시 버튼을 누르고 있는 시간. -1이면 안 누름
-var _air_left := 0.0
-var _air_total := 0.6
+var _clone_ready := false # 이번 대시에서 분신을 아직 안 남겼다
+var _double_grace := 0.0
 
 
 func max_dash_charges() -> int:
 	var lv := weapon_level("gale")
 	return 1 + (1 if lv >= 3 else 0) + (1 if lv >= 6 else 0)
-
-
-func is_airborne() -> bool:
-	return _air_left > 0.0
 
 
 func _recharge_dash(delta: float) -> void:
@@ -197,28 +199,14 @@ func _body_tech(id: String, key: String) -> float:
 	return d[key] + d.get(key + "_lv", 0.0) * (weapon_level(id) - 1)
 
 
-func _handle_dash_input(delta: float) -> void:
-	if weapon_level("moon") <= 0:
-		if Input.is_action_just_pressed("dash") and dash_charges > 0:
-			_start_dash()
+func _handle_dash_input(_delta: float) -> void:
+	if not Input.is_action_just_pressed("dash"):
 		return
-	# 월면 낙하가 있으면: 짧게 누르면 대시, 길게 눌렀다 떼면 도약
-	if Input.is_action_just_pressed("dash") and dash_charges > 0:
-		_hold = 0.0
-	if _hold < 0.0:
+	# 대시가 막 끝났을 때 누른 것도 분신으로 받아 준다(두 번 빠르게 누르기)
+	if _double_grace > 0.0 and _clone_ready:
+		_try_clone()
 		return
-	if Input.is_action_pressed("dash"):
-		_hold += delta
-		_visual.charging = _hold >= JUMP_HOLD
-		return
-	var long := _hold >= JUMP_HOLD
-	_hold = -1.0
-	_visual.charging = false
-	if dash_charges <= 0:
-		return
-	if long:
-		_start_jump()
-	else:
+	if dash_charges > 0:
 		_start_dash()
 
 
@@ -244,6 +232,9 @@ func _update_body_dash(delta: float) -> void:
 			trail.from = _dash_start
 			trail.to = position
 			world.add_child(trail)
+			_gale_crescent()
+		if weapon_level("burst") > 0 and world:
+			_burst()
 
 
 func _spawn_afterimage() -> void:
@@ -256,92 +247,62 @@ func _spawn_afterimage() -> void:
 	world.add_child(a)
 
 
-func _try_shadow_leap() -> void:
-	var reach := _body_tech("leap", "range")
-	var best: Enemy = null
-	var best_d := reach
-	for e in get_tree().get_nodes_in_group("enemies"):
-		var enemy := e as Enemy
-		if enemy == null or enemy.dead or enemy.marks <= 0:
-			continue
-		var to := enemy.global_position - position
-		var d := to.length()
-		if d < best_d and absf(angle_difference(_dash_dir.angle(), to.angle())) < deg_to_rad(45.0):
-			best_d = d
-			best = enemy
-	if best == null:
-		return
-	_spawn_afterimage()
-	_spawn_puff(position)
-	position = best.global_position + _dash_dir * (best.radius * best.size_mult + 10.0)
-	_dash_start = position
-	var fx: Node2D = SlashFx.new()
-	fx.position = best.global_position
+## 질풍: 대시 끝에서 앞쪽으로 초승달 검기를 휘두른다. 검기 안의 적은 질풍 피해를 한 번 더 받는다.
+func _gale_crescent() -> void:
+	var r := _body_tech("gale", "crescent") * area_visual()
+	var fx: Node2D = SlashArc.new()
+	fx.position = position
+	fx.radius = r
+	fx.sweep = 2.8 * (1.0 if randf() < 0.5 else -1.0)
+	fx.start_angle = _dash_dir.angle() - fx.sweep / 2.0
+	fx.duration = 0.1
+	fx.color = Color(1.0, 0.75, 0.35)
 	world.add_child(fx)
-	var dmg := _body_tech("leap", "damage") * might
-	if best.is_boss:
-		best.take_damage(dmg * 1.5)
-		best.add_mark()
-	elif best.marks >= int(GameData.TECH.leap.execute_marks) and not best.is_target:
-		best.executed = true
-		best.take_damage(best.hp + 1.0)
-	else:
-		best.take_damage(dmg, _dash_dir * 60.0)
-		if not best.dead:
-			best.add_mark()
-
-
-func _start_jump() -> void:
-	dash_charges -= 1
-	if dash_cooldown_left <= 0.0:
-		dash_cooldown_left = DASH_COOLDOWN
-	_air_total = GameData.TECH.moon.air_time
-	_air_left = _air_total
-	_invuln = maxf(_invuln, _air_total + 0.1)
-	_spawn_puff(position)
-
-
-func _update_jump(delta: float) -> void:
-	_air_left -= delta
-	position += move_dir * base_speed * speed_mult * float(GameData.TECH.moon.air_speed) * delta
-	var k := clampf(1.0 - _air_left / _air_total, 0.0, 1.0)
-	_visual.position.y = -sin(PI * k) * 30.0
-	_visual.rotation = k * TAU * signf(_visual.scale.x)
-	queue_redraw()
-	if _air_left <= 0.0:
-		_air_left = 0.0
-		_visual.position.y = 0.0
-		_visual.rotation = 0.0
-		queue_redraw()
-		_land()
-
-
-func _land() -> void:
-	var r := _body_tech("moon", "radius") * area
-	var dmg := _body_tech("moon", "damage") * might
+	var dmg := _body_tech("gale", "damage") * might
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var enemy := e as Enemy
 		if enemy == null or enemy.dead:
 			continue
 		var to := enemy.global_position - position
-		if to.length() <= r + enemy.radius * enemy.size_mult:
-			enemy.take_damage(dmg, to.normalized() * 220.0)
-			enemy.slow_time = maxf(enemy.slow_time, 0.8)
-	if world:
-		var w := Shockwave.new()
-		w.position = position
-		w.radius = r
-		world.add_child(w)
+		if to.length() <= r + enemy.radius * enemy.size_mult and to.dot(_dash_dir) > -4.0:
+			enemy.take_damage(dmg, to.normalized() * 120.0)
 
 
-func _draw() -> void:
-	# 도약 중 바닥 그림자
-	if _air_left > 0.0:
-		var k := 1.0 - _air_left / _air_total
-		var s := 1.0 - 0.4 * sin(PI * k)
-		draw_set_transform(Vector2(0, 10), 0.0, Vector2(1.0, 0.4))
-		draw_circle(Vector2.ZERO, 10.0 * s, Color(0, 0, 0, 0.35))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+## 잔영 폭발: 지나온 길(4·7레벨)과 도착점이 차례로 터진다.
+func _burst() -> void:
+	var lv := weapon_level("burst")
+	var trail_points := 0 if lv < 4 else (2 if lv < 7 else 4)
+	var r := _body_tech("burst", "radius") * area
+	var chain: Node2D = BurstChain.new()
+	chain.damage = _body_tech("burst", "damage") * might
+	var t := 0.05
+	for i in trail_points:
+		var k := float(i + 1) / float(trail_points + 1)
+		chain.points.append(_dash_start.lerp(position, k))
+		chain.delays.append(t)
+		chain.radii.append(r * 0.6)
+		t += 0.06
+	chain.points.append(position)
+	chain.delays.append(t + 0.04)
+	chain.radii.append(r)
+	world.add_child(chain)
+
+
+## 그림자 분신: 출발한 자리에 분신을 남긴다. 한 번의 대시에 하나.
+func _try_clone() -> void:
+	if not _clone_ready or world == null:
+		return
+	_clone_ready = false
+	_double_grace = 0.0
+	var c: Node2D = ShadowClone.new()
+	c.player = self
+	c.position = _dash_start
+	c.facing_x = signf(_visual.scale.x)
+	c.life = _body_tech("clone", "life")
+	c.radius = _body_tech("clone", "radius") * area
+	c.damage = _body_tech("clone", "damage") * might
+	world.add_child(c)
+	_spawn_puff(_dash_start)
 
 
 func _spawn_puff(at: Vector2) -> void:

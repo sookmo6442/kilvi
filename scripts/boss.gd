@@ -1,6 +1,7 @@
 class_name Boss
 extends Enemy
-## 보스. 패턴 두세 개를 쿨타임마다 돌린다.
+## 보스. 패턴 서너 개를 쿨타임마다 돌린다. 탄막(나선, 고리, 쓸기, 조여드는 원)이 섞인다.
+## 체력이 절반 아래(phase2)면 탄이 늘고 간격이 짧아진다.
 ## 암살 표식이 mark_limit개 쌓이면 3초간 그로기(멈춤, 받는 피해 2배).
 
 signal staggered(boss: Boss)
@@ -18,10 +19,27 @@ var _c := 7.0
 var _dash_tele := 0.0
 var _dash_left := 0.0
 var _dash_dir := Vector2.ZERO
+var _dash_len := 160.0 # 이번 돌진 거리. 예고선 길이와 같다
+
+const DASH_SPEED := 340.0
 var _burst_left := 0
 var _burst_t := 0.0
 var _blink_t := 0.0
 var _blink_to := Vector2.ZERO
+var _d := 9.0
+# 나선 탄막: 남은 시간 동안 arms 갈래로 돌며 쏜다
+var _spiral_left := 0.0
+var _spiral_t := 0.0
+var _spiral_ang := 0.0
+var _spiral_arms := 2
+var _spiral_step := 0.25
+var _spiral_speed := 90.0
+var _spiral_color := Color.WHITE
+# 쓸기 탄막: 킬비 쪽 부채꼴을 한쪽 끝에서 반대쪽 끝으로 훑는다
+var _sweep_left := 0.0
+var _sweep_total := 1.0
+var _sweep_t := 0.0
+var _sweep_base := 0.0
 
 
 func setup_boss(d: Dictionary, p: Player, hp_mult: float) -> void:
@@ -49,6 +67,10 @@ func phase2() -> bool:
 func _physics_process(delta: float) -> void:
 	if dead or player == null:
 		return
+	if Enemy.frozen_left > 0.0:
+		modulate = Color(0.6, 0.8, 1.4)
+		return
+	modulate = Color.WHITE
 	_t += delta
 	if _flash > 0.0:
 		_flash -= delta
@@ -66,6 +88,9 @@ func _physics_process(delta: float) -> void:
 	_a -= delta
 	_b -= delta
 	_c -= delta
+	_d -= delta
+	_update_spiral(delta)
+	_update_sweep(delta)
 	match boss_id:
 		"big_goblin": dir = _goblin(delta, dir)
 		"gumiho": _gumiho(delta, to_player)
@@ -75,8 +100,12 @@ func _physics_process(delta: float) -> void:
 	if _dash_tele > 0.0:
 		dir = Vector2.ZERO
 	elif _dash_left > 0.0:
+		# 돌진은 느려짐을 무시하고 예고선 끝까지 정확히 간다
+		# (졸개 무리에 밀리거나 넉백되지 않게 이때는 위치만 옮긴다)
 		dir = _dash_dir
-		spd *= 5.0
+		spd = DASH_SPEED
+		separation = Vector2.ZERO
+		_knock = Vector2.ZERO
 	position += dir * spd * delta + _knock * delta + separation * 0.2 * delta
 	separation = Vector2.ZERO
 	_knock = _knock.move_toward(Vector2.ZERO, 900.0 * delta)
@@ -93,21 +122,44 @@ func _goblin(delta: float, dir: Vector2) -> Vector2:
 	if _dash_tele > 0.0:
 		_dash_tele -= delta
 		if _dash_tele <= 0.0:
-			_dash_left = 0.6
+			_dash_left = _dash_len / DASH_SPEED
 	elif _dash_left > 0.0:
 		_dash_left -= delta
+		if _dash_left <= 0.0:
+			# 곤봉 내려찍기: 멈춘 자리에서 느리게 퍼지다 빨라지는 고리
+			_ring(14 if not phase2() else 20, 60.0, Color(1.0, 0.45, 0.3), 4.0, 90.0)
 	elif _a <= 0.0:
-		_a = 4.0
-		_dash_dir = (player.global_position - global_position).normalized()
+		_a = 4.0 if not phase2() else 3.2
+		var to_p := player.global_position - global_position
+		_dash_dir = to_p.normalized()
+		# 킬비가 있던 자리를 조금 지나칠 만큼 돌진한다
+		_dash_len = clampf(to_p.length() + 50.0, 120.0, 300.0)
 		_dash_tele = 0.7
+	# 도깨비불 나선
+	if _c <= 0.0 and _spiral_left <= 0.0:
+		_c = 6.5 if not phase2() else 5.0
+		_start_spiral(2.4, 2 if not phase2() else 3, 0.23, 85.0, Color(0.55, 0.8, 1.0))
 	# 졸개 소환
 	if _b <= 0.0:
 		_b = 9.0
 		_summon("wisp", 6)
-	return dir
+	return dir * (0.0 if _spiral_left > 0.0 else 1.0)
 
 
 func _gumiho(_delta: float, to_player: Vector2) -> void:
+	# 휘어지는 여우불: 양쪽으로 감기며 퍼진다
+	if _c <= 0.0:
+		_c = 5.5 if not phase2() else 4.2
+		var n := 12
+		for i in n:
+			for sgn in [-1.0, 1.0]:
+				var b := EnemyBullet.fire(get_parent(), global_position, Vector2.from_angle(TAU * i / n) * 85.0, damage * 0.5, player, Color(1.0, 0.4, 0.6), 3.5)
+				b.turn = 0.9 * sgn
+				b.life = 5.0
+	# 2페이즈: 아홉 꼬리 나선
+	if phase2() and _d <= 0.0 and _spiral_left <= 0.0:
+		_d = 7.0
+		_start_spiral(3.0, 3, 0.19, 95.0, Color(1.0, 0.85, 0.6))
 	# 여우불 고리
 	if _a <= 0.0:
 		_a = 3.2 if not phase2() else 2.4
@@ -141,6 +193,12 @@ func _crow(_delta: float) -> void:
 	if _b <= 0.0:
 		_b = 8.0
 		_summon("crow", 3)
+	# 날개 쓸기: 킬비 쪽 120도를 깃털로 훑는다
+	if _c <= 0.0 and _sweep_left <= 0.0:
+		_c = 6.0 if not phase2() else 4.5
+		_sweep_total = 1.4
+		_sweep_left = _sweep_total
+		_sweep_base = (player.global_position - global_position).angle()
 
 
 func _hunter(delta: float, to_player: Vector2, dir: Vector2) -> Vector2:
@@ -163,6 +221,19 @@ func _hunter(delta: float, to_player: Vector2, dir: Vector2) -> Vector2:
 		var n := 7 if not p2 else 11
 		for k in n:
 			EnemyBullet.fire(get_parent(), global_position, Vector2.from_angle(base + (k - n / 2) * 0.14) * 150.0, damage * 0.5, player, Color(0.85, 0.87, 0.95))
+	# 달빛 포위: 킬비 둘레에 탄이 떠 있다가 한가운데로 모인다. 빈틈은 한 곳뿐
+	if _d <= 0.0:
+		_d = 7.5 if not p2 else 5.5
+		var n := 28
+		var gap := randi() % n
+		for i in n:
+			if i == gap or i == (gap + 1) % n or i == (gap + 2) % n:
+				continue
+			var a := TAU * i / n
+			var pos := player.global_position + Vector2.from_angle(a) * 110.0
+			var b := EnemyBullet.fire(get_parent(), pos, Vector2.from_angle(a + PI) * 40.0, damage * 0.5, player, Color(0.75, 0.8, 1.0), 3.5)
+			b.delay = 0.9
+			b.accel = 140.0
 	# 2페이즈: 달빛 고리 + 여우 소환
 	if p2 and _c <= 0.0:
 		_c = 7.0
@@ -170,6 +241,54 @@ func _hunter(delta: float, to_player: Vector2, dir: Vector2) -> Vector2:
 			EnemyBullet.fire(get_parent(), global_position, Vector2.from_angle(TAU * i / 24.0) * 80.0, damage * 0.5, player, Color(0.75, 0.8, 1.0), 4.0)
 		_summon("fox", 4)
 	return dir * (1.3 if p2 else 1.0)
+
+
+# --- 탄막 도우미 ---------------------------------------------------------
+
+## 보스 자리에서 사방으로 n발. accel이 있으면 느리게 출발해 빨라진다.
+func _ring(n: int, spd: float, col: Color, sz: float = 3.5, accel: float = 0.0) -> void:
+	var off := randf() * TAU
+	for i in n:
+		var b := EnemyBullet.fire(get_parent(), global_position, Vector2.from_angle(off + TAU * i / n) * spd, damage * 0.5, player, col, sz)
+		b.accel = accel
+		b.max_speed = spd * 2.5
+
+
+func _start_spiral(time: float, arms: int, step: float, spd: float, col: Color) -> void:
+	_spiral_left = time
+	_spiral_t = 0.0
+	_spiral_ang = randf() * TAU
+	_spiral_arms = arms
+	_spiral_step = step
+	_spiral_speed = spd
+	_spiral_color = col
+
+
+func _update_spiral(delta: float) -> void:
+	if _spiral_left <= 0.0:
+		return
+	_spiral_left -= delta
+	_spiral_t -= delta
+	if _spiral_t <= 0.0:
+		_spiral_t = 0.09
+		_spiral_ang += _spiral_step
+		for k in _spiral_arms:
+			EnemyBullet.fire(get_parent(), global_position, Vector2.from_angle(_spiral_ang + TAU * k / _spiral_arms) * _spiral_speed, damage * 0.5, player, _spiral_color, 3.5)
+
+
+func _update_sweep(delta: float) -> void:
+	if _sweep_left <= 0.0:
+		return
+	_sweep_left -= delta
+	_sweep_t -= delta
+	if _sweep_t <= 0.0:
+		_sweep_t = 0.05
+		var k := 1.0 - _sweep_left / _sweep_total # 0 → 1
+		var a := _sweep_base + lerpf(-1.05, 1.05, k)
+		EnemyBullet.fire(get_parent(), global_position, Vector2.from_angle(a) * 150.0, damage * 0.5, player, Color(0.75, 0.55, 1.0))
+		if phase2():
+			# 반대 방향에서도 동시에
+			EnemyBullet.fire(get_parent(), global_position, Vector2.from_angle(_sweep_base + lerpf(1.05, -1.05, k)) * 150.0, damage * 0.5, player, Color(0.75, 0.55, 1.0))
 
 
 func _summon(id: String, count: int) -> void:
@@ -194,6 +313,8 @@ func add_mark() -> void:
 		stagger_left = STAGGER_TIME
 		_dash_tele = 0.0
 		_dash_left = 0.0
+		_spiral_left = 0.0
+		_sweep_left = 0.0
 		staggered.emit(self)
 
 
@@ -202,7 +323,7 @@ func _draw() -> void:
 	# 돌진 예고선
 	if _dash_tele > 0.0:
 		var local_dir := Vector2(_dash_dir.x * scale.x, _dash_dir.y)
-		draw_line(Vector2.ZERO, local_dir * 160.0, Color(1.0, 0.2, 0.15, 0.5), radius * 1.4)
+		draw_line(Vector2.ZERO, local_dir * _dash_len, Color(1.0, 0.2, 0.15, 0.5), radius * 1.4)
 	match boss_id:
 		"big_goblin":
 			draw_circle(Vector2.ZERO, radius, c)
@@ -238,4 +359,8 @@ func _draw() -> void:
 		for i in 3:
 			var a := _t * 4.0 + TAU * i / 3.0
 			draw_circle(Vector2(cos(a) * 12.0, -radius - 8 + sin(a) * 3.0), 2.0, Color(1.0, 0.9, 0.3))
-	pass # 보스 표식은 화면 위 보스 체력바에 표시한다
+	# 화면 밖이면 가장자리에 깜빡이는 빨간 화살표 (좌우 뒤집힘·흔들림을 되돌려 월드 방향 그대로 그린다)
+	draw_set_transform_matrix(get_global_transform().affine_inverse() * Transform2D(0.0, global_position))
+	var pulse := 0.6 + 0.4 * absf(sin(_t * 6.0))
+	SpecialItem.draw_offscreen_arrow(self, player, Color(1.0, 0.15, 0.15, pulse), 1.6)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

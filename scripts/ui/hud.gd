@@ -1,9 +1,10 @@
 extends CanvasLayer
-## 화면 정보: 위쪽에 레벨·시간·처치 수, 맨 아래에 경험치 바.
+## 화면 정보: 위쪽에 시간·처치 수, 맨 아래에 경험치 바.
 ## 체력과 대시는 킬비 머리 위(overhead_bars.gd)에 뜬다.
 
+const SkillSlot := preload("res://scripts/ui/skill_slot.gd")
+
 var _xp_bar: ProgressBar
-var _level_label: Label
 var _time_label: Label
 var _kills_label: Label
 var _contract_label: Label
@@ -11,9 +12,15 @@ var _skill_label: Label
 var _boss_label: Label
 var _boss_bar: ProgressBar
 var _boss_marks: ProgressBar
-var _skill_bar: ProgressBar
+var _skill_slot: SkillSlot
 var _message_label: Label
 var _message_left := 0.0
+var _tint: ColorRect
+var _screen_flash := Color(0, 0, 0, 0)
+var _edge: Control
+var _edge_on := false
+var _edge_break := 0.0
+var _t := 0.0
 
 
 func _ready() -> void:
@@ -23,15 +30,23 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
+	# 화면 전체 색 덮개(달빛 모래 푸른빛, 정화 부적 번쩍임)와 무피격 테두리
+	_tint = ColorRect.new()
+	_tint.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tint.color = Color(0, 0, 0, 0)
+	root.add_child(_tint)
+	_edge = Control.new()
+	_edge.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_edge.draw.connect(_draw_edge)
+	root.add_child(_edge)
+
 	# 맨 아래: 경험치 바
 	_xp_bar = UiStyle.bar(Color(0.35, 0.7, 1.0), 5)
 	_xp_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	_xp_bar.offset_top = -5
 	root.add_child(_xp_bar)
-
-	_level_label = Label.new()
-	_level_label.position = Vector2(6, 4)
-	root.add_child(_level_label)
 
 	_time_label = Label.new()
 	_time_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -84,18 +99,18 @@ func _ready() -> void:
 	root.add_child(_boss_marks)
 	hide_boss()
 
-	# 왼쪽 아래: 특수 스킬
+	# 왼쪽 아래: 특수 스킬 아이콘과 이름
+	_skill_slot = SkillSlot.new()
+	_skill_slot.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_skill_slot.position = Vector2(6, -44)
+	root.add_child(_skill_slot)
 	_skill_label = Label.new()
 	_skill_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_skill_label.position = Vector2(6, -36)
+	_skill_label.position = Vector2(40, -34)
+	_skill_label.add_theme_font_size_override("font_size", 12)
 	root.add_child(_skill_label)
-	_skill_bar = UiStyle.bar(UiStyle.ORANGE, 4)
-	_skill_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_skill_bar.position = Vector2(6, -15)
-	_skill_bar.size = Vector2(110, 4)
-	root.add_child(_skill_bar)
 	_skill_label.visible = false
-	_skill_bar.visible = false
+	_skill_slot.visible = false
 
 	var ver := Label.new()
 	ver.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -112,33 +127,30 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_t += delta
+	if _screen_flash.a > 0.0:
+		_screen_flash.a = move_toward(_screen_flash.a, 0.0, delta * 2.0)
+		_tint.color = _screen_flash
+	if _edge_on or _edge_break > 0.0:
+		_edge_break = maxf(_edge_break - delta, 0.0)
+		_edge.queue_redraw()
 	if _message_left > 0.0:
 		_message_left -= delta
 		_message_label.modulate.a = clampf(_message_left / 0.4, 0.0, 1.0)
 
 
-var _skill_name := ""
-var _skill_key := ""
-
-
-func setup_skill(skill_name: String, key: String) -> void:
-	_skill_name = skill_name
-	_skill_key = key
+func setup_skill(id: String, skill_name: String, key: String) -> void:
+	_skill_slot.setup(id, skill_name, key)
+	_skill_label.text = skill_name
 	_skill_label.visible = true
-	_skill_bar.visible = true
+	_skill_slot.visible = true
 
 
 func set_skill(left: float, total: float) -> void:
-	if _skill_name == "":
+	if not _skill_slot.visible:
 		return
-	_skill_bar.max_value = total
-	_skill_bar.value = total - left
-	if left > 0.0:
-		_skill_label.text = "[%s] %s  %d초" % [_skill_key, _skill_name, ceili(left)]
-		_skill_label.modulate = Color(0.7, 0.7, 0.7)
-	else:
-		_skill_label.text = "[%s] %s  준비" % [_skill_key, _skill_name]
-		_skill_label.modulate = Color.WHITE
+	_skill_slot.set_cooldown(left, total)
+	_skill_label.modulate = Color(0.6, 0.6, 0.6) if left > 0.0 else Color.WHITE
 
 
 func set_boss(boss_name: String, hp: float, max_hp: float, marks: int, mark_limit: int, staggered: bool) -> void:
@@ -168,10 +180,9 @@ func flash_message(text: String) -> void:
 	_message_label.modulate.a = 1.0
 
 
-func set_xp(xp: int, needed: int, level: int) -> void:
+func set_xp(xp: int, needed: int, _level: int) -> void:
 	_xp_bar.max_value = needed
 	_xp_bar.value = xp
-	_level_label.text = "Lv %d" % level
 
 
 func set_time(t: float) -> void:
@@ -180,3 +191,38 @@ func set_time(t: float) -> void:
 
 func set_kills(k: int) -> void:
 	_kills_label.text = "처치 %d" % k
+
+
+## 화면 전체를 이 색으로 덮는다(알파 0이면 끔).
+func set_tint(c: Color) -> void:
+	if _screen_flash.a <= 0.0:
+		_tint.color = c
+
+
+## 화면을 잠깐 이 색으로 번쩍이고 사라지게 한다.
+func flash_screen(c: Color) -> void:
+	_screen_flash = c
+	_tint.color = c
+
+
+## 무피격 임무: 화면 가장자리가 은은하게 빛난다. 끄면 깨지듯 붉게 번쩍인다(실패일 때만 보임).
+func set_edge(on: bool) -> void:
+	if _edge_on and not on:
+		_edge_break = 0.0
+	_edge_on = on
+	_edge.queue_redraw()
+
+
+func break_edge() -> void:
+	_edge_on = false
+	_edge_break = 0.5
+
+
+func _draw_edge() -> void:
+	var r := Rect2(Vector2.ZERO, _edge.size)
+	if _edge_on:
+		var a := 0.35 + 0.2 * sin(_t * 3.0)
+		for i in 3:
+			_edge.draw_rect(r.grow(-1.0 - i * 2.0), Color(0.55, 0.85, 1.0, a / (i + 1)), false, 2.0)
+	elif _edge_break > 0.0:
+		_edge.draw_rect(r.grow(-2.0), Color(1.0, 0.25, 0.2, _edge_break * 1.6), false, 4.0)

@@ -16,6 +16,8 @@ var xp_value := 1
 var color := Color.WHITE
 var behavior := "chase"
 var dead := false
+## 달빛 모래: 0보다 크면 모든 적과 적 탄이 멈춘다(main이 줄인다).
+static var frozen_left := 0.0
 var slow_time := 0.0
 
 ## 암살 표식: 쿠나이에 맞을 때마다 1개. mark_limit개가 되면 즉시 처형.
@@ -84,6 +86,10 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if dead or player == null:
 		return
+	if Enemy.frozen_left > 0.0:
+		modulate = Color(0.6, 0.8, 1.4)
+		return
+	modulate = Color.WHITE
 	_t += delta
 	slow_time = maxf(slow_time - delta, 0.0)
 	if is_target:
