@@ -19,6 +19,9 @@ var _c := 7.0
 var _dash_tele := 0.0
 var _dash_left := 0.0
 var _dash_dir := Vector2.ZERO
+var _dash_len := 160.0 # 이번 돌진 거리. 예고선 길이와 같다
+
+const DASH_SPEED := 340.0
 var _burst_left := 0
 var _burst_t := 0.0
 var _blink_t := 0.0
@@ -93,8 +96,12 @@ func _physics_process(delta: float) -> void:
 	if _dash_tele > 0.0:
 		dir = Vector2.ZERO
 	elif _dash_left > 0.0:
+		# 돌진은 느려짐을 무시하고 예고선 끝까지 정확히 간다
+		# (졸개 무리에 밀리거나 넉백되지 않게 이때는 위치만 옮긴다)
 		dir = _dash_dir
-		spd *= 5.0
+		spd = DASH_SPEED
+		separation = Vector2.ZERO
+		_knock = Vector2.ZERO
 	position += dir * spd * delta + _knock * delta + separation * 0.2 * delta
 	separation = Vector2.ZERO
 	_knock = _knock.move_toward(Vector2.ZERO, 900.0 * delta)
@@ -111,7 +118,7 @@ func _goblin(delta: float, dir: Vector2) -> Vector2:
 	if _dash_tele > 0.0:
 		_dash_tele -= delta
 		if _dash_tele <= 0.0:
-			_dash_left = 0.6
+			_dash_left = _dash_len / DASH_SPEED
 	elif _dash_left > 0.0:
 		_dash_left -= delta
 		if _dash_left <= 0.0:
@@ -119,7 +126,10 @@ func _goblin(delta: float, dir: Vector2) -> Vector2:
 			_ring(14 if not phase2() else 20, 60.0, Color(1.0, 0.45, 0.3), 4.0, 90.0)
 	elif _a <= 0.0:
 		_a = 4.0 if not phase2() else 3.2
-		_dash_dir = (player.global_position - global_position).normalized()
+		var to_p := player.global_position - global_position
+		_dash_dir = to_p.normalized()
+		# 킬비가 있던 자리를 조금 지나칠 만큼 돌진한다
+		_dash_len = clampf(to_p.length() + 50.0, 120.0, 300.0)
 		_dash_tele = 0.7
 	# 도깨비불 나선
 	if _c <= 0.0 and _spiral_left <= 0.0:
@@ -309,7 +319,7 @@ func _draw() -> void:
 	# 돌진 예고선
 	if _dash_tele > 0.0:
 		var local_dir := Vector2(_dash_dir.x * scale.x, _dash_dir.y)
-		draw_line(Vector2.ZERO, local_dir * 160.0, Color(1.0, 0.2, 0.15, 0.5), radius * 1.4)
+		draw_line(Vector2.ZERO, local_dir * _dash_len, Color(1.0, 0.2, 0.15, 0.5), radius * 1.4)
 	match boss_id:
 		"big_goblin":
 			draw_circle(Vector2.ZERO, radius, c)
