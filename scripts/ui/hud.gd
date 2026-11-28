@@ -15,6 +15,12 @@ var _boss_marks: ProgressBar
 var _skill_slot: SkillSlot
 var _message_label: Label
 var _message_left := 0.0
+var _tint: ColorRect
+var _screen_flash := Color(0, 0, 0, 0)
+var _edge: Control
+var _edge_on := false
+var _edge_break := 0.0
+var _t := 0.0
 
 
 func _ready() -> void:
@@ -23,6 +29,18 @@ func _ready() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+
+	# 화면 전체 색 덮개(달빛 모래 푸른빛, 정화 부적 번쩍임)와 무피격 테두리
+	_tint = ColorRect.new()
+	_tint.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tint.color = Color(0, 0, 0, 0)
+	root.add_child(_tint)
+	_edge = Control.new()
+	_edge.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_edge.draw.connect(_draw_edge)
+	root.add_child(_edge)
 
 	# 맨 아래: 경험치 바
 	_xp_bar = UiStyle.bar(Color(0.35, 0.7, 1.0), 5)
@@ -109,6 +127,13 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_t += delta
+	if _screen_flash.a > 0.0:
+		_screen_flash.a = move_toward(_screen_flash.a, 0.0, delta * 2.0)
+		_tint.color = _screen_flash
+	if _edge_on or _edge_break > 0.0:
+		_edge_break = maxf(_edge_break - delta, 0.0)
+		_edge.queue_redraw()
 	if _message_left > 0.0:
 		_message_left -= delta
 		_message_label.modulate.a = clampf(_message_left / 0.4, 0.0, 1.0)
@@ -166,3 +191,38 @@ func set_time(t: float) -> void:
 
 func set_kills(k: int) -> void:
 	_kills_label.text = "처치 %d" % k
+
+
+## 화면 전체를 이 색으로 덮는다(알파 0이면 끔).
+func set_tint(c: Color) -> void:
+	if _screen_flash.a <= 0.0:
+		_tint.color = c
+
+
+## 화면을 잠깐 이 색으로 번쩍이고 사라지게 한다.
+func flash_screen(c: Color) -> void:
+	_screen_flash = c
+	_tint.color = c
+
+
+## 무피격 임무: 화면 가장자리가 은은하게 빛난다. 끄면 깨지듯 붉게 번쩍인다(실패일 때만 보임).
+func set_edge(on: bool) -> void:
+	if _edge_on and not on:
+		_edge_break = 0.0
+	_edge_on = on
+	_edge.queue_redraw()
+
+
+func break_edge() -> void:
+	_edge_on = false
+	_edge_break = 0.5
+
+
+func _draw_edge() -> void:
+	var r := Rect2(Vector2.ZERO, _edge.size)
+	if _edge_on:
+		var a := 0.35 + 0.2 * sin(_t * 3.0)
+		for i in 3:
+			_edge.draw_rect(r.grow(-1.0 - i * 2.0), Color(0.55, 0.85, 1.0, a / (i + 1)), false, 2.0)
+	elif _edge_break > 0.0:
+		_edge.draw_rect(r.grow(-2.0), Color(1.0, 0.25, 0.2, _edge_break * 1.6), false, 4.0)

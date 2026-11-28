@@ -67,6 +67,10 @@ func phase2() -> bool:
 func _physics_process(delta: float) -> void:
 	if dead or player == null:
 		return
+	if Enemy.frozen_left > 0.0:
+		modulate = Color(0.6, 0.8, 1.4)
+		return
+	modulate = Color.WHITE
 	_t += delta
 	if _flash > 0.0:
 		_flash -= delta

@@ -33,6 +33,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if Enemy.frozen_left > 0.0:
+		return
 	if delay > 0.0:
 		delay -= delta
 		queue_redraw()

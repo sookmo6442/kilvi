@@ -12,13 +12,11 @@ const PostFxScript := preload("res://scripts/ui/post_fx.gd")
 const SlashScript := preload("res://scripts/effects/slash.gd")
 const ChestScript := preload("res://scripts/treasure_chest.gd")
 const BossScript := preload("res://scripts/boss.gd")
+const MissionsScript := preload("res://scripts/missions.gd")
 const SEP_CELL := 16.0
 const RING_WAVES := [[35.0, "wisp"], [90.0, "wisp"], [180.0, "bat"], [300.0, "bat"], [540.0, "fox"], [840.0, "imp"], [1080.0, "ninja"]]
 
 const BASE_SIZE := Vector2i(640, 360) # 게임 화면 해상도 (project.godot과 같게)
-const CONTRACT_FIRST := 45.0 # 첫 표적 의뢰 시각(초)
-const CONTRACT_INTERVAL := 60.0
-const CONTRACT_TIME := 30.0 # 표적을 잡아야 하는 제한 시간
 
 ## 다시 하기를 눌러도 지난번 고른 스킬에 커서를 둔다
 static var last_skill := "flash"
@@ -37,13 +35,13 @@ var _ring_index := 0
 var _boss_index := 0
 var _boss: Boss = null
 var _finished := false
-var _next_contract := CONTRACT_FIRST
-var _contract_target: Enemy = null
+var missions: Node
 var _last_hitstop := -1.0
 
 
 func _ready() -> void:
 	randomize()
+	Enemy.frozen_left = 0.0 # 다시 하기 때 남아 있지 않게
 	_setup_input()
 	_fit_window()
 
@@ -70,6 +68,9 @@ func _ready() -> void:
 	add_child(post_fx)
 	hud = HudScript.new()
 	add_child(hud)
+	missions = MissionsScript.new()
+	missions.main = self
+	add_child(missions)
 	level_up_ui = LevelUpScript.new()
 	add_child(level_up_ui)
 	menu = MenuScript.new()
@@ -106,7 +107,10 @@ func _process(delta: float) -> void:
 	hud.set_skill(player.skill_cooldown_left, player.skill_cooldown())
 	_update_spawns(delta)
 	_update_bosses()
-	_update_contract()
+	missions.update(delta)
+	if Enemy.frozen_left > 0.0:
+		Enemy.frozen_left = maxf(Enemy.frozen_left - delta, 0.0)
+		hud.set_tint(Color(0.35, 0.55, 1.0, 0.18 * minf(Enemy.frozen_left, 1.0)))
 
 
 func _physics_process(_delta: float) -> void:
@@ -354,10 +358,8 @@ func _on_boss_killed(b: Boss) -> void:
 		_finish.call_deferred(true)
 		return
 	hud.flash_message("%s 처치!" % b.boss_name)
-	var chest: Node2D = ChestScript.new()
-	chest.player = player
-	chest.position = b.global_position
-	world.add_child.call_deferred(chest)
+	drop_chest(b.global_position)
+	drop_item("bell", b.global_position + Vector2(26, 0)) # 중간 보스는 모우의 방울 확정
 
 
 func _random_edge_position() -> Vector2:
@@ -372,39 +374,58 @@ func _spawn_enemy(id: String, pos: Vector2) -> void:
 	world.add_child(e)
 
 
-# --- 표적 의뢰 -----------------------------------------------------------
+# --- 보상과 특수 아이템 ---------------------------------------------------
 
-func _update_contract() -> void:
-	if _contract_target != null and is_instance_valid(_contract_target) and not _contract_target.dead:
-		hud.set_contract("표적 의뢰  %d초" % ceili(_contract_target.target_time_left))
-		return
-	if _boss != null:
-		_next_contract = maxf(_next_contract, time + 20.0)
-		return
-	if time >= _next_contract:
-		_next_contract += CONTRACT_INTERVAL
-		var e: Enemy = EnemyScript.new()
-		e.setup("fox", player, _hp_mult(), true, CONTRACT_TIME)
-		e.position = _random_edge_position()
-		e.killed.connect(_on_enemy_killed)
-		world.add_child(e)
-		_contract_target = e
-		hud.flash_message("표적 출현!")
+func drop_chest(pos: Vector2) -> void:
+	var chest: Node2D = ChestScript.new()
+	chest.player = player
+	chest.position = pos
+	world.add_child.call_deferred(chest)
 
 
-func _on_contract_done(success: bool, pos: Vector2) -> void:
-	_contract_target = null
-	hud.set_contract("")
-	if success:
-		hud.flash_message("의뢰 완수")
-		var chest: Node2D = ChestScript.new()
-		chest.player = player
-		chest.position = pos
-		world.add_child.call_deferred(chest)
-		post_fx.execution_flash(1.0)
-		_hitstop(0.12)
-	else:
-		hud.flash_message("표적이 도망쳤다")
+func drop_item(kind: String, pos: Vector2) -> void:
+	SpecialItem.spawn(world, pos, kind, player, _on_item_picked)
+
+
+## 임무 보상용: 네 가지 중 하나. 체력이 반 아래면 당근이 잘 나온다.
+func random_item() -> String:
+	if player.hp < player.max_hp * 0.5 and randf() < 0.5:
+		return "carrot"
+	var ids := GameData.ITEMS.keys()
+	return ids[randi() % ids.size()]
+
+
+## 일반 적 처치 시 아주 낮은 확률로 떨어진다.
+func _roll_item_drop(pos: Vector2) -> void:
+	var r := randf()
+	for k in GameData.ITEMS:
+		r -= GameData.ITEMS[k].drop
+		if r < 0.0:
+			drop_item(k, pos)
+			return
+
+
+func _on_item_picked(kind: String) -> void:
+	hud.flash_message(GameData.ITEMS[kind].name + "!")
+	match kind:
+		"bell":
+			for g in get_tree().get_nodes_in_group("gems"):
+				g.attract()
+		"charm":
+			# 화면 안 일반 적 정리 (보스·표적 제외). 경험치는 그대로 떨어진다
+			post_fx.execution_flash(1.4)
+			hud.flash_screen(Color(1, 1, 1, 0.7))
+			_hitstop(0.1)
+			for e in get_tree().get_nodes_in_group("enemies"):
+				if e.is_boss or e.is_target or e.dead:
+					continue
+				var off: Vector2 = e.global_position - player.global_position
+				if absf(off.x) < 340.0 and absf(off.y) < 200.0:
+					e.take_damage(e.hp + 99999.0)
+		"sand":
+			Enemy.frozen_left = GameData.SAND_TIME
+		"carrot":
+			player.heal(GameData.CARROT_HEAL)
 
 
 func _on_weapon_evolved(id: String) -> void:
@@ -427,7 +448,7 @@ func _on_enemy_killed(e: Enemy) -> void:
 	if e.is_boss:
 		_on_boss_killed(e as Boss)
 	if e.is_target:
-		_on_contract_done(not e.escaped, e.global_position)
+		missions.on_target_done(not e.escaped, e.global_position)
 	if e.escaped:
 		return
 	if e.executed:
@@ -445,6 +466,8 @@ func _on_enemy_killed(e: Enemy) -> void:
 			_spawn_enemy.call_deferred(split, e.global_position + Vector2.from_angle(randf() * TAU) * 10.0)
 	kills += 1
 	hud.set_kills(kills)
+	if not e.is_boss and not e.is_target:
+		_roll_item_drop(e.global_position)
 	var gem: Node2D = GemScript.new()
 	gem.value = e.xp_value
 	gem.player = player

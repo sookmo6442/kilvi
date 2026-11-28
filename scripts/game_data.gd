@@ -5,7 +5,7 @@ extends RefCounted
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 6
 const MAX_PASSIVES := 6
-const VERSION := "0.16.1"
+const VERSION := "0.17"
 const MAX_ENEMIES := 500
 
 ## 갈래: 체술(쿠나이를 쥐고 베기), 비술(닌자 도구), 인술(속성 술법).
@@ -101,6 +101,27 @@ const SPAWN_TABLE := [
 	[600.0, {"wisp": 0.2, "bat": 0.15, "fox": 0.15, "imp": 0.15, "crow": 0.15, "ninja": 0.1, "turtle": 0.1}],
 	[900.0, {"wisp": 0.15, "bat": 0.15, "fox": 0.15, "imp": 0.15, "crow": 0.15, "ninja": 0.15, "turtle": 0.1}],
 ]
+
+## 특수 아이템: 땅에 떨어지고 밟으면 바로 발동. drop은 일반 적 처치 시 확률(합계 약 0.3%).
+const ITEMS := {
+	"bell": {"name": "모우의 방울", "desc": "경험치 보석을 전부 끌어온다", "color": Color(1.0, 0.8, 0.25), "drop": 0.0005},
+	"charm": {"name": "이오나의 정화 부적", "desc": "화면 안 적을 쓸어버린다", "color": Color(0.7, 0.4, 1.0), "drop": 0.0005},
+	"sand": {"name": "달빛 모래", "desc": "5초 동안 적이 멈춘다", "color": Color(0.55, 0.75, 1.0), "drop": 0.0005},
+	"carrot": {"name": "당근", "desc": "체력 30 회복", "color": Color(1.0, 0.55, 0.15), "drop": 0.0015},
+}
+const SAND_TIME := 5.0
+const CARROT_HEAL := 30.0
+
+## 임무: 처음 MISSION_FIRST초, 그 뒤 MISSION_INTERVAL초마다 하나씩 랜덤(보스전 중에는 쉰다).
+## time은 제한 시간. hard면 보상으로 보물 상자와 특수 아이템을 둘 다 준다.
+const MISSION_FIRST := 45.0
+const MISSION_INTERVAL := 90.0
+const MISSIONS := {
+	"target": {"name": "표적 암살", "time": 30.0, "hard": false},
+	"no_hit": {"name": "무피격", "time": 30.0, "hard": false},
+	"scroll": {"name": "두루마리 운반", "time": 40.0, "hard": true, "dist_min": 150.0, "dist_max": 250.0},
+	"barrier": {"name": "결계 지키기", "time": 45.0, "hard": true, "radius": 60.0, "hold": 15.0},
+}
 
 ## 보스. time초에 등장. mark_limit만큼 표식이 쌓이면 그로기.
 const BOSSES := [
