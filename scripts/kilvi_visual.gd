@@ -13,7 +13,7 @@ var invulnerable := false
 var dead := false
 var stealthed := false
 var ambush := false
-var charging := false # 월면 낙하 준비 중
+var kicking := false # 토끼 튕겨 차기: 뒷발을 뒤로 뻗는다
 var base_scale := 1.0
 
 var _t := 0.0
@@ -38,10 +38,10 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if dead:
 		rotation = PI / 2.0
-	if charging:
-		# 월면 낙하 준비: 발밑에 주황 고리가 맥박친다
-		var pulse := 10.0 + sin(_t * 20.0) * 1.5
-		draw_arc(Vector2(0, 8), pulse, 0, TAU, 20, Color(1.0, 0.62, 0.1, 0.9), 1.0)
+	if kicking:
+		# (임시 그림) 뒤로 뻗은 뒷발과 발끝 섬광. 나중에 차는 포즈 스프라이트로 바꾼다
+		draw_line(Vector2(-2, 6), Vector2(-13, 3), Color(0.06, 0.06, 0.08), 3.0)
+		draw_circle(Vector2(-14, 3), 2.5, Color(1.0, 0.62, 0.1, 0.9))
 	var bob := sin(_t * 14.0) * 1.5 if moving else sin(_t * 3.0) * 0.5
 	var step := sin(_t * 14.0) * 2.0 if moving else 0.0
 

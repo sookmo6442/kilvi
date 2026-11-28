@@ -17,7 +17,7 @@ const WEAPON_SCRIPTS := {
 	"bomb": preload("res://scripts/weapons/bomb_shuriken.gd"),
 	"gale": preload("res://scripts/weapons/body_tech.gd"),
 	"leap": preload("res://scripts/weapons/body_tech.gd"),
-	"moon": preload("res://scripts/weapons/body_tech.gd"),
+	"kick": preload("res://scripts/weapons/body_tech.gd"),
 	"fire": preload("res://scripts/weapons/fire_jutsu.gd"),
 	"water": preload("res://scripts/weapons/water_jutsu.gd"),
 	"thunder": preload("res://scripts/weapons/thunder_jutsu.gd"),
@@ -109,13 +109,17 @@ func _physics_process(delta: float) -> void:
 	if move_dir != Vector2.ZERO:
 		facing = move_dir.normalized()
 
-	if _air_left > 0.0:
-		_update_jump(delta)
-	elif _dash_time > 0.0:
+	_kick_grace = maxf(_kick_grace - delta, 0.0)
+	_update_kick_visual(delta)
+	if _dash_time > 0.0:
 		_dash_time -= delta
 		position += _dash_dir * _dash_speed * delta
 		if _body_dash:
 			_update_body_dash(delta)
+		if _dash_time <= 0.0:
+			_kick_grace = KICK_GRACE
+		if Input.is_action_just_pressed("dash"):
+			_try_kick()
 	else:
 		position += move_dir * base_speed * speed_mult * delta
 		_handle_dash_input(delta)
@@ -131,7 +135,7 @@ func _physics_process(delta: float) -> void:
 
 func _body_dash_visible() -> bool:
 	# 체술을 하나라도 들면 대시 중에도 몸이 보이고 잔상이 남는다
-	return weapon_level("gale") > 0 or weapon_level("leap") > 0 or weapon_level("moon") > 0
+	return weapon_level("gale") > 0 or weapon_level("leap") > 0 or weapon_level("kick") > 0
 
 
 func _start_dash() -> void:
@@ -146,6 +150,7 @@ func _start_dash() -> void:
 	_gale_hit.clear()
 	_dash_start = position
 	_afterimage_t = 0.0
+	_kicks_left = kick_bounces()
 	if weapon_level("leap") > 0:
 		_try_shadow_leap()
 	_spawn_puff(position)
@@ -154,8 +159,10 @@ func _start_dash() -> void:
 # --- 체술: 대시 버튼을 강화한다 ------------------------------------------
 # 질풍(gale): 대시가 지나간 길의 적을 벤다. 3·6레벨에 대시 충전 +1.
 # 그림자 도약(leap): 대시 방향 근처의 표식 있는 적 뒤로 순간이동해 벤다.
-# 월면 낙하(moon): 대시 버튼을 길게 눌렀다 떼면 뛰어올라, 공중에서 조종하다 내려찍는다.
-const JUMP_HOLD := 0.22
+# 토끼 튕겨 차기(kick): 대시 중(또는 끝난 직후 KICK_GRACE초)에 한 번 더 누르면
+#   뒷발로 차며 방향키 쪽으로 다시 튀어 나간다. 찬 자리에 충격파. 대시 충전은 쓰지 않는다.
+const KICK_GRACE := 0.12
+const KICK_POSE := 0.18
 const Afterimage := preload("res://scripts/effects/afterimage.gd")
 const Shockwave := preload("res://scripts/effects/shockwave.gd")
 const GaleTrail := preload("res://scripts/effects/gale_trail.gd")
@@ -166,9 +173,9 @@ var _body_dash := false
 var _gale_hit := {}
 var _dash_start := Vector2.ZERO
 var _afterimage_t := 0.0
-var _hold := -1.0 # 대시 버튼을 누르고 있는 시간. -1이면 안 누름
-var _air_left := 0.0
-var _air_total := 0.6
+var _kicks_left := 0 # 이번 대시에서 더 튈 수 있는 횟수
+var _kick_grace := 0.0
+var _kick_pose := 0.0
 
 
 func max_dash_charges() -> int:
@@ -176,8 +183,12 @@ func max_dash_charges() -> int:
 	return 1 + (1 if lv >= 3 else 0) + (1 if lv >= 6 else 0)
 
 
-func is_airborne() -> bool:
-	return _air_left > 0.0
+## 한 번의 대시에서 튈 수 있는 횟수: 1, 4레벨 2, 7레벨 3
+func kick_bounces() -> int:
+	var lv := weapon_level("kick")
+	if lv <= 0:
+		return 0
+	return 1 + (1 if lv >= 4 else 0) + (1 if lv >= 7 else 0)
 
 
 func _recharge_dash(delta: float) -> void:
@@ -197,28 +208,14 @@ func _body_tech(id: String, key: String) -> float:
 	return d[key] + d.get(key + "_lv", 0.0) * (weapon_level(id) - 1)
 
 
-func _handle_dash_input(delta: float) -> void:
-	if weapon_level("moon") <= 0:
-		if Input.is_action_just_pressed("dash") and dash_charges > 0:
-			_start_dash()
+func _handle_dash_input(_delta: float) -> void:
+	if not Input.is_action_just_pressed("dash"):
 		return
-	# 월면 낙하가 있으면: 짧게 누르면 대시, 길게 눌렀다 떼면 도약
-	if Input.is_action_just_pressed("dash") and dash_charges > 0:
-		_hold = 0.0
-	if _hold < 0.0:
+	# 대시가 막 끝났을 때 누른 것도 튕겨 차기로 받아 준다(두 번 빠르게 누르기)
+	if _kick_grace > 0.0 and _kicks_left > 0:
+		_try_kick()
 		return
-	if Input.is_action_pressed("dash"):
-		_hold += delta
-		_visual.charging = _hold >= JUMP_HOLD
-		return
-	var long := _hold >= JUMP_HOLD
-	_hold = -1.0
-	_visual.charging = false
-	if dash_charges <= 0:
-		return
-	if long:
-		_start_jump()
-	else:
+	if dash_charges > 0:
 		_start_dash()
 
 
@@ -291,57 +288,48 @@ func _try_shadow_leap() -> void:
 			best.add_mark()
 
 
-func _start_jump() -> void:
-	dash_charges -= 1
-	if dash_cooldown_left <= 0.0:
-		dash_cooldown_left = DASH_COOLDOWN
-	_air_total = GameData.TECH.moon.air_time
-	_air_left = _air_total
-	_invuln = maxf(_invuln, _air_total + 0.1)
-	_spawn_puff(position)
-
-
-func _update_jump(delta: float) -> void:
-	_air_left -= delta
-	position += move_dir * base_speed * speed_mult * float(GameData.TECH.moon.air_speed) * delta
-	var k := clampf(1.0 - _air_left / _air_total, 0.0, 1.0)
-	_visual.position.y = -sin(PI * k) * 30.0
-	_visual.rotation = k * TAU * signf(_visual.scale.x)
-	queue_redraw()
-	if _air_left <= 0.0:
-		_air_left = 0.0
-		_visual.position.y = 0.0
-		_visual.rotation = 0.0
-		queue_redraw()
-		_land()
-
-
-func _land() -> void:
-	var r := _body_tech("moon", "radius") * area
-	var dmg := _body_tech("moon", "damage") * might
+func _try_kick() -> void:
+	if _kicks_left <= 0:
+		return
+	_kicks_left -= 1
+	_kick_grace = 0.0
+	var r := _body_tech("kick", "radius") * area
+	var dmg := _body_tech("kick", "damage") * might
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var enemy := e as Enemy
 		if enemy == null or enemy.dead:
 			continue
 		var to := enemy.global_position - position
 		if to.length() <= r + enemy.radius * enemy.size_mult:
-			enemy.take_damage(dmg, to.normalized() * 220.0)
-			enemy.slow_time = maxf(enemy.slow_time, 0.8)
+			enemy.take_damage(dmg, to.normalized() * 240.0)
 	if world:
 		var w := Shockwave.new()
 		w.position = position
 		w.radius = r
 		world.add_child(w)
+	_spawn_puff(position)
+	# 방향키 쪽으로 다시 튀어 나간다 (안 누르고 있으면 반대로 되튄다)
+	var new_dir := move_dir.normalized() if move_dir != Vector2.ZERO else -_dash_dir
+	_dash_dir = new_dir
+	facing = new_dir
+	_dash_time = DASH_TIME
+	_dash_speed = DASH_DISTANCE * 0.9 / DASH_TIME
+	_invuln = maxf(_invuln, DASH_TIME + 0.1)
+	_body_dash = true
+	_gale_hit.clear()
+	_dash_start = position
+	_kick_pose = KICK_POSE
+	if weapon_level("leap") > 0:
+		_try_shadow_leap()
 
 
-func _draw() -> void:
-	# 도약 중 바닥 그림자
-	if _air_left > 0.0:
-		var k := 1.0 - _air_left / _air_total
-		var s := 1.0 - 0.4 * sin(PI * k)
-		draw_set_transform(Vector2(0, 10), 0.0, Vector2(1.0, 0.4))
-		draw_circle(Vector2.ZERO, 10.0 * s, Color(0, 0, 0, 0.35))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+func _update_kick_visual(delta: float) -> void:
+	if _kick_pose <= 0.0:
+		return
+	_kick_pose = maxf(_kick_pose - delta, 0.0)
+	_visual.kicking = _kick_pose > 0.0
+	# 차는 순간 앞으로 기울었다가 돌아온다
+	_visual.rotation = sin(PI * _kick_pose / KICK_POSE) * 0.5 * signf(_visual.scale.x)
 
 
 func _spawn_puff(at: Vector2) -> void:

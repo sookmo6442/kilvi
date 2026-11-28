@@ -1,5 +1,5 @@
 extends Node2D
-## 월면 낙하 착지 충격파.
+## 토끼 튕겨 차기 충격파.
 
 const LIFE := 0.35
 var radius := 52.0
