@@ -5,7 +5,7 @@ extends RefCounted
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 6
 const MAX_PASSIVES := 6
-const VERSION := "0.14"
+const VERSION := "0.15"
 const MAX_ENEMIES := 500
 
 ## 갈래: 체술(쿠나이를 쥐고 베기), 비술(닌자 도구), 인술(속성 술법).

@@ -8,10 +8,13 @@ var _body: Label
 var _buttons_box: VBoxContainer
 var _left: PanelContainer
 var _right: PanelContainer
-var _left_text: RichTextLabel
-var _right_text: RichTextLabel
+var _left_box: VBoxContainer
+var _right_box: VBoxContainer
 
+const IconTile := preload("res://scripts/ui/icon_tile.gd")
 const SIDE_WIDTH := 168
+const SIDE_HEIGHT := 260
+const TILES_PER_ROW := 4
 
 
 func _ready() -> void:
@@ -34,7 +37,9 @@ func _ready() -> void:
 	center.add_child(row)
 
 	_left = _side_panel()
-	_left_text = _left.get_child(0)
+	_left_box = VBoxContainer.new()
+	_left_box.add_theme_constant_override("separation", 4)
+	_left.add_child(_left_box)
 	row.add_child(_left)
 
 	var panel := PanelContainer.new()
@@ -45,7 +50,9 @@ func _ready() -> void:
 	row.add_child(panel)
 
 	_right = _side_panel()
-	_right_text = _right.get_child(0)
+	_right_box = VBoxContainer.new()
+	_right_box.add_theme_constant_override("separation", 4)
+	_right.add_child(_right_box)
 	row.add_child(_right)
 
 	var box := VBoxContainer.new()
@@ -68,12 +75,14 @@ func _ready() -> void:
 
 
 ## buttons: [[id, 글자], ...]
-## left/right: 양옆 패널에 넣을 BBCode 글. 비어 있으면 그 패널은 숨긴다.
-func open(title: String, body: String, buttons: Array, left: String = "", right: String = "") -> void:
-	_left.visible = left != ""
-	_right.visible = right != ""
-	_left_text.text = left
-	_right_text.text = right
+## left: 왼쪽 상태 표. {"title": 글, "rows": [[이름, 값], [] (빈 줄), ...]}. 비어 있으면 숨긴다.
+## right: 오른쪽 아이콘 목록. [{"title": 글, "tiles": [{"id", "name", "corner", "border"}]}, ...]
+##        비어 있으면 숨긴다.
+func open(title: String, body: String, buttons: Array, left: Dictionary = {}, right: Array = []) -> void:
+	_left.visible = not left.is_empty()
+	_right.visible = not right.is_empty()
+	_fill_left(left)
+	_fill_right(right)
 	_title.text = title
 	_body.text = body
 	_body.visible = body != ""
@@ -102,16 +111,56 @@ func _side_panel() -> PanelContainer:
 	var style := UiStyle.box(UiStyle.DARK, Color(UiStyle.CREAM, 0.5), 1)
 	style.set_content_margin_all(8)
 	p.add_theme_stylebox_override("panel", style)
-	p.custom_minimum_size = Vector2(SIDE_WIDTH, 0)
+	p.custom_minimum_size = Vector2(SIDE_WIDTH, SIDE_HEIGHT)
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	p.visible = false
-	var t := RichTextLabel.new()
-	t.bbcode_enabled = true
-	t.fit_content = true
-	t.scroll_active = false
-	t.autowrap_mode = TextServer.AUTOWRAP_OFF
-	t.custom_minimum_size = Vector2(SIDE_WIDTH - 16, 0)
-	t.add_theme_font_size_override("normal_font_size", 12)
-	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(t)
 	return p
+
+
+func _small_label(text: String, color: Color = UiStyle.CREAM) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 12)
+	l.add_theme_color_override("font_color", color)
+	return l
+
+
+func _fill_left(data: Dictionary) -> void:
+	for c in _left_box.get_children():
+		c.queue_free()
+	if data.is_empty():
+		return
+	_left_box.add_child(_small_label(data.title, UiStyle.ORANGE))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("v_separation", 2)
+	_left_box.add_child(grid)
+	for r in data.rows:
+		var a := _small_label(r[0] if r.size() > 0 else "")
+		a.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(a)
+		var v := _small_label(r[1] if r.size() > 1 else "")
+		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		grid.add_child(v)
+
+
+func _fill_right(sections: Array) -> void:
+	for c in _right_box.get_children():
+		c.queue_free()
+	for i in sections.size():
+		var sec: Dictionary = sections[i]
+		if i > 0:
+			var gap := Control.new()
+			gap.custom_minimum_size = Vector2(0, 6)
+			_right_box.add_child(gap)
+		var head := _small_label(sec.title, UiStyle.ORANGE)
+		_right_box.add_child(head)
+		var grid := GridContainer.new()
+		grid.columns = TILES_PER_ROW
+		grid.add_theme_constant_override("h_separation", 5)
+		grid.add_theme_constant_override("v_separation", 5)
+		_right_box.add_child(grid)
+		for t in sec.tiles:
+			var tile := IconTile.new()
+			tile.setup(t.id, t.name, t.corner, t.border)
+			grid.add_child(tile)
