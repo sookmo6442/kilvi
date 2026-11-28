@@ -9,7 +9,9 @@
 | shuriken.png | 표창 |
 | smoke.png | 연기탄 |
 | bomb.png | 기폭수리검 |
-| spin.png | 회전 베기 (체술) |
+| gale.png | 질풍 (체술) |
+| leap.png | 그림자 도약 (체술) |
+| moon.png | 월면 낙하 (체술) |
 | fire.png | 화둔 (인술) |
 | water.png | 수둔 (인술) |
 | thunder.png | 뇌둔 (인술) |

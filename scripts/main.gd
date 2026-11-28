@@ -105,7 +105,7 @@ func _process(delta: float) -> void:
 		return
 	time += delta
 	hud.set_time(time)
-	hud.set_dash(player.dash_cooldown_left, Player.DASH_COOLDOWN)
+	hud.set_dash(player.dash_cooldown_left if player.dash_charges <= 0 else 0.0, Player.DASH_COOLDOWN, player.dash_charges, player.max_dash_charges())
 	hud.set_skill(player.skill_cooldown_left, player.skill_cooldown())
 	_update_spawns(delta)
 	_update_bosses()

@@ -4,6 +4,7 @@ extends CanvasLayer
 var _xp_bar: ProgressBar
 var _hp_bar: ProgressBar
 var _dash_bar: ProgressBar
+var _dash_charges_label: Label
 var _level_label: Label
 var _time_label: Label
 var _kills_label: Label
@@ -73,6 +74,12 @@ func _ready() -> void:
 	_dash_bar.position = Vector2(6, 33)
 	_dash_bar.size = Vector2(90, 3)
 	root.add_child(_dash_bar)
+	_dash_charges_label = Label.new()
+	_dash_charges_label.position = Vector2(99, 26)
+	_dash_charges_label.add_theme_font_size_override("font_size", 10)
+	_dash_charges_label.add_theme_color_override("font_color", UiStyle.ORANGE)
+	_dash_charges_label.visible = false
+	root.add_child(_dash_charges_label)
 
 	# 위쪽 가운데: 보스 체력과 표식
 	_boss_label = Label.new()
@@ -189,9 +196,12 @@ func set_hp(hp: float, max_hp: float) -> void:
 	_hp_bar.value = hp
 
 
-func set_dash(left: float, total: float) -> void:
+func set_dash(left: float, total: float, charges: int = 1, max_charges: int = 1) -> void:
 	_dash_bar.max_value = total
 	_dash_bar.value = total - left
+	if _dash_charges_label:
+		_dash_charges_label.visible = max_charges > 1
+		_dash_charges_label.text = "x%d" % charges
 
 
 func set_time(t: float) -> void:
