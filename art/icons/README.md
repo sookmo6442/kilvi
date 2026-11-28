@@ -11,8 +11,8 @@
 | smoke.png | 연기탄 |
 | bomb.png | 기폭수리검 |
 | gale.png | 질풍 (체술) |
-| leap.png | 그림자 도약 (체술) |
-| kick.png | 토끼 튕겨 차기 (체술) |
+| burst.png | 잔영 폭발 (체술) |
+| clone.png | 그림자 분신 (체술) |
 | fire.png | 화둔 (인술) |
 | water.png | 수둔 (인술) |
 | thunder.png | 뇌둔 (인술) |

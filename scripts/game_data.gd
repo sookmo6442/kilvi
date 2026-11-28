@@ -5,7 +5,7 @@ extends RefCounted
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 6
 const MAX_PASSIVES := 6
-const VERSION := "0.18"
+const VERSION := "0.19"
 const MAX_ENEMIES := 500
 
 ## 갈래: 체술(쿠나이를 쥐고 베기), 비술(닌자 도구), 인술(속성 술법).
@@ -21,9 +21,9 @@ const WEAPONS := {
 	"shuriken": {"name": "표창", "school": "비술", "desc": "킬비 주위를 도는 표창.", "max_level": 8},
 	"smoke": {"name": "연기탄", "school": "비술", "desc": "발밑에 적을 느리게 하는 연기를 남긴다.", "max_level": 8},
 	"bomb": {"name": "기폭수리검", "school": "비술", "desc": "아무 방향으로 날아가 적에게 박히고, 2초 뒤 폭발한다. 레벨이 오를수록 폭발이 세지고 커진다.", "max_level": 8},
-	"gale": {"name": "질풍", "school": "체술", "desc": "[대시 강화] 대시가 지나간 길의 적을 벤다. 3·6레벨에 대시를 한 번 더 연달아 쓸 수 있다.", "max_level": 8},
-	"leap": {"name": "그림자 도약", "school": "체술", "desc": "[대시 강화] 대시 방향 근처에 표식 있는 적이 있으면 그 뒤로 순간이동해 벤다. 표식 2개 이상이면 처형.", "max_level": 8},
-	"kick": {"name": "토끼 튕겨 차기", "school": "체술", "desc": "[대시 강화] 대시 중에 한 번 더 누르면 뒷발로 차며 방향키 쪽으로 다시 튀어 나간다. 찬 자리에 충격파. 4·7레벨에 한 번 더 튈 수 있다.", "max_level": 8},
+	"gale": {"name": "질풍", "school": "체술", "desc": "[대시 강화] 대시가 지나간 길의 적을 베고, 끝에서 초승달 검기를 휘두른다. 레벨마다 대시가 길어지고, 3·6레벨에 대시를 한 번 더 연달아 쓸 수 있다.", "max_level": 8},
+	"burst": {"name": "잔영 폭발", "school": "체술", "desc": "[대시 강화] 대시가 끝나면 도착한 자리가 터진다. 맞고 살아남은 적에게 표식. 4·7레벨에는 지나온 잔영도 차례로 터진다.", "max_level": 8},
+	"clone": {"name": "그림자 분신", "school": "체술", "desc": "[대시 강화] 대시 중에 스페이스를 한 번 더 누르면 출발한 자리에 분신이 남아 적을 끌어모으고, 잠시 뒤 터진다.", "max_level": 8},
 	"fire": {"name": "화둔", "school": "인술", "desc": "바라보는 방향으로 불덩이를 쏜다. 맞으면 터지고 주변 적이 불탄다.", "max_level": 8},
 	"water": {"name": "수둔", "school": "인술", "desc": "적을 따라가는 물 유도탄. 맞으면 물이 튀어 주변 적까지 느려지고 젖는다.", "max_level": 8},
 	"thunder": {"name": "뇌둔", "school": "인술", "desc": "랜덤한 적에게 번개가 떨어진다. 젖은 적을 먼저 노리고, 주변 젖은 적에게도 튄다.", "max_level": 8},
@@ -43,9 +43,9 @@ const PASSIVES := {
 
 ## 체술·인술 수치. 레벨 l에서 값 = base + per_level * (l - 1)
 const TECH := {
-	"gale": {"damage": 16.0, "damage_lv": 6.0},
-	"leap": {"damage": 30.0, "damage_lv": 10.0, "range": 120.0, "range_lv": 10.0, "execute_marks": 2},
-	"kick": {"damage": 22.0, "damage_lv": 7.0, "radius": 36.0, "radius_lv": 3.0},
+	"gale": {"damage": 16.0, "damage_lv": 6.0, "dash_mult": 1.15, "dash_mult_lv": 0.1, "crescent": 26.0, "crescent_lv": 2.0},
+	"burst": {"damage": 24.0, "damage_lv": 8.0, "radius": 34.0, "radius_lv": 3.0},
+	"clone": {"damage": 30.0, "damage_lv": 10.0, "radius": 46.0, "radius_lv": 4.0, "life": 1.0, "life_lv": 0.1},
 	"fire": {"damage": 16.0, "damage_lv": 6.0, "blast": 28.0, "blast_lv": 2.0, "cooldown": 1.8, "cooldown_lv": -0.06, "speed": 210.0, "burn_time": 3.0, "burn_dps": 4.0, "burn_dps_lv": 1.5},
 	"water": {"damage": 7.0, "damage_lv": 3.0, "cooldown": 1.4, "cooldown_lv": -0.05, "speed": 170.0, "wet_time": 3.0, "slow_time": 1.5, "splash": 26.0},
 	"thunder": {"damage": 22.0, "damage_lv": 8.0, "cooldown": 2.4, "cooldown_lv": -0.1, "radius": 16.0, "warn": 0.35, "chain_range": 80.0, "chain_max": 4, "chain_mult": 0.7},
