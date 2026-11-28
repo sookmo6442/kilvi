@@ -21,7 +21,7 @@ const CONTRACT_INTERVAL := 60.0
 const CONTRACT_TIME := 30.0 # 표적을 잡아야 하는 제한 시간
 
 ## 다시 하기를 눌러도 지난번 고른 스킬에 커서를 둔다
-static var last_skill := "stealth"
+static var last_skill := "flash"
 
 var world: Node2D
 var player: Player

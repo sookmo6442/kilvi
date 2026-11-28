@@ -73,6 +73,7 @@ var decoy: Node2D = null
 var _invuln := 0.0
 var _dash_time := 0.0
 var _dash_dir := Vector2.ZERO
+var _dash_speed := 0.0
 var _visual: Node2D
 
 
@@ -102,7 +103,7 @@ func _physics_process(delta: float) -> void:
 
 	if _dash_time > 0.0:
 		_dash_time -= delta
-		position += _dash_dir * (DASH_DISTANCE / DASH_TIME) * delta
+		position += _dash_dir * _dash_speed * delta
 	else:
 		position += move_dir * base_speed * speed_mult * delta
 		if Input.is_action_just_pressed("dash") and dash_cooldown_left <= 0.0:
@@ -120,6 +121,7 @@ func _physics_process(delta: float) -> void:
 func _start_dash() -> void:
 	_dash_dir = facing
 	_dash_time = DASH_TIME
+	_dash_speed = DASH_DISTANCE / DASH_TIME
 	dash_cooldown_left = DASH_COOLDOWN
 	_invuln = maxf(_invuln, DASH_TIME + 0.1)
 	_spawn_puff(position)
@@ -146,6 +148,25 @@ func use_skill() -> void:
 		stealth_left = STEALTH_TIME
 		ambush_ready = true
 		_spawn_puff(position)
+	elif skill_id == "flash":
+		_flash_slash()
+
+
+## 섬광 베기: 바라보는 방향으로 빠르게 돌진하며 초승달 검기를 날린다.
+func _flash_slash() -> void:
+	var f: Dictionary = GameData.FLASH
+	skill_cooldown_left = skill_cooldown()
+	_dash_dir = facing
+	_dash_time = f.dash_time
+	_dash_speed = f.dash_distance / f.dash_time
+	_invuln = maxf(_invuln, f.dash_time + 0.15)
+	var wave := preload("res://scripts/effects/flash_wave.gd").new()
+	wave.position = position
+	wave.direction = facing
+	wave.damage = f.damage * might
+	wave.size = area_visual()
+	wave.life = f.wave_life * duration
+	world.add_child(wave)
 
 
 ## 통나무 둔갑: 맞는 순간 통나무를 남기고 빈자리로 순간이동한다.

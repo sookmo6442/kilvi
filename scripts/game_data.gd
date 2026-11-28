@@ -5,7 +5,7 @@ extends RefCounted
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 4
 const MAX_PASSIVES := 6
-const VERSION := "0.8.1"
+const VERSION := "0.9"
 const MAX_ENEMIES := 500
 
 const WEAPONS := {
@@ -37,11 +37,17 @@ const EVOLUTIONS := {
 
 ## 특수 스킬: 판 시작 전에 1개만 골라 들고 간다.
 const SKILLS := {
+	"flash": {"name": "섬광 베기", "key": "Q", "cooldown": 6.0,
+		"desc": "바라보는 방향으로 돌진하며 초승달 검기를 날린다. 검기는 적을 관통하고, 표식이 있는 적은 즉시 처형한다."},
 	"stealth": {"name": "그림자 은신", "key": "Q", "cooldown": 20.0,
 		"desc": "2초간 사라진다. 적은 마지막 자리로 몰리고, 은신 후 첫 쿠나이는 3배 치명타."},
 	"log": {"name": "통나무 둔갑", "key": "자동", "cooldown": 25.0,
 		"desc": "맞는 순간 통나무를 남기고 빈자리로 이동. 통나무는 적을 2초간 모은 뒤 터진다."},
 }
+
+## 섬광 베기 수치
+const FLASH := {"dash_distance": 90.0, "dash_time": 0.14, "damage": 25.0, "boss_marks": 2,
+	"wave_speed": 480.0, "wave_life": 0.45, "wave_radius": 22.0}
 
 const ENEMIES := {
 	"wisp": {"name": "도깨비불", "hp": 4.0, "speed": 38.0, "damage": 5.0, "radius": 7.0, "xp": 1,
