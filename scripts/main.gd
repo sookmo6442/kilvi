@@ -199,8 +199,83 @@ func _unhandled_input(event: InputEvent) -> void:
 		if menu.visible:
 			menu.close()
 		else:
-			menu.open("일시정지", "F11  전체 화면 전환", [["resume", "계속하기"], ["restart", "처음부터"], ["quit", "게임 종료"]])
+			menu.open("일시정지", "F11  전체 화면 전환", [["resume", "계속하기"], ["restart", "처음부터"], ["quit", "게임 종료"]], _status_text(), _skills_text())
 		get_viewport().set_input_as_handled()
+
+
+# --- 일시정지 양옆 정보 -------------------------------------------------
+
+const _C_HEAD := "#ff9e1a"
+const _C_DIM := "#8c877d"
+
+
+func _pct(mult: float) -> String:
+	var p := roundi((mult - 1.0) * 100.0)
+	return "+%d%%" % p if p > 0 else "-"
+
+
+## 두 칸 표: 왼쪽은 이름, 오른쪽은 값(오른쪽 정렬). 빈 행은 [] 로 넣는다.
+func _table(head: String, rows: Array, ratio := Vector2i(3, 2)) -> String:
+	var out := "[color=%s]%s[/color]\n[table=2]" % [_C_HEAD, head]
+	for r in rows:
+		if r.is_empty():
+			out += "[cell] [/cell][cell] [/cell]"
+		else:
+			out += "[cell expand=%d]%s[/cell][cell expand=%d][right]%s[/right][/cell]" % [ratio.x, r[0], ratio.y, r[1]]
+	return out + "[/table]"
+
+
+## 왼쪽: 지금 상태
+func _status_text() -> String:
+	var p := player
+	return _table("상태", [
+		["레벨", str(p.level)],
+		["경험치", "%d / %d" % [p.xp, p.xp_needed]],
+		["체력", "%d / %d" % [ceili(p.hp), roundi(p.max_hp)]],
+		[],
+		["공격력", _pct(p.might)],
+		["공격 범위", _pct(p.area)],
+		["지속시간", _pct(p.duration)],
+		["투사체", "+%d" % p.extra_projectiles if p.extra_projectiles > 0 else "-"],
+		["이동 속도", _pct(p.speed_mult)],
+		["획득 범위", _pct(p.pickup_mult)],
+		["대시 충전", str(p.max_dash_charges())],
+		[],
+		["시간", "%02d:%02d" % [int(time) / 60, int(time) % 60]],
+		["처치", str(kills)],
+	])
+
+
+## 오른쪽: 든 기술과 패시브의 레벨
+func _skills_text() -> String:
+	var p := player
+	var out := ""
+	if p.skill_id != "":
+		var sk: Dictionary = GameData.SKILLS[p.skill_id]
+		out += _table("특수 스킬", [[sk.name, "[color=%s]%s[/color]" % [_C_DIM, sk.key]]], Vector2i(4, 1)) + "\n\n"
+	var rows := []
+	for id in p.weapons:
+		var w = p.weapons[id]
+		var d: Dictionary = GameData.WEAPONS[id]
+		var col: Color = GameData.SCHOOLS.get(d.school, Color.WHITE)
+		var wname: String = d.name
+		var lv := "Lv %d" % w.level
+		if w.evolved:
+			wname = GameData.EVOLUTIONS[id].name
+			lv = "진화"
+		elif w.level >= d.max_level:
+			lv = "MAX"
+		rows.append(["[color=#%s]%s[/color] %s" % [col.to_html(false), d.school, wname], lv])
+	out += _table("기술  %d/%d" % [p.weapons.size(), GameData.MAX_WEAPONS], rows, Vector2i(4, 1)) + "\n\n"
+	rows = []
+	for id in p.passives:
+		var d: Dictionary = GameData.PASSIVES[id]
+		var lv: int = p.passives[id]
+		rows.append([d.name, "MAX" if lv >= d.max_level else "Lv %d" % lv])
+	if rows.is_empty():
+		rows.append(["[color=%s]없음[/color]" % _C_DIM, ""])
+	out += _table("패시브  %d/%d" % [p.passives.size(), GameData.MAX_PASSIVES], rows, Vector2i(4, 1))
+	return out
 
 
 # --- 스폰 ---------------------------------------------------------------

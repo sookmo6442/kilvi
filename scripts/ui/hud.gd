@@ -1,11 +1,10 @@
 extends CanvasLayer
-## 화면 정보: 위쪽에 레벨·시간·처치 수, 맨 아래에 경험치 바.
+## 화면 정보: 위쪽에 시간·처치 수, 맨 아래에 경험치 바.
 ## 체력과 대시는 킬비 머리 위(overhead_bars.gd)에 뜬다.
 
 const SkillSlot := preload("res://scripts/ui/skill_slot.gd")
 
 var _xp_bar: ProgressBar
-var _level_label: Label
 var _time_label: Label
 var _kills_label: Label
 var _contract_label: Label
@@ -30,10 +29,6 @@ func _ready() -> void:
 	_xp_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	_xp_bar.offset_top = -5
 	root.add_child(_xp_bar)
-
-	_level_label = Label.new()
-	_level_label.position = Vector2(6, 4)
-	root.add_child(_level_label)
 
 	_time_label = Label.new()
 	_time_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -160,10 +155,9 @@ func flash_message(text: String) -> void:
 	_message_label.modulate.a = 1.0
 
 
-func set_xp(xp: int, needed: int, level: int) -> void:
+func set_xp(xp: int, needed: int, _level: int) -> void:
 	_xp_bar.max_value = needed
 	_xp_bar.value = xp
-	_level_label.text = "Lv %d" % level
 
 
 func set_time(t: float) -> void:
