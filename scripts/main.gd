@@ -94,8 +94,7 @@ func _open_skill_select() -> void:
 		var d: Dictionary = GameData.SKILLS[id]
 		if id == last_skill:
 			focus = options.size()
-		options.append({"kind": "skill", "id": id,
-			"label": "%s  [%s · %d초]\n   %s" % [d.name, d.key, int(d.cooldown), d.desc]})
+		options.append(_option("skill", id, d.name, "%s · 쿨타임 %d초" % [d.key, int(d.cooldown)], d.desc))
 	level_up_ui.open(options, "특수 스킬을 하나 고르세요", focus)
 
 
@@ -360,30 +359,49 @@ func _open_next_level_up() -> void:
 	level_up_ui.open(_roll_options())
 
 
+var _levelups_rolled := 0
+
+
+## 카드 한 장. label은 예전 한 줄 표기(테스트·로그용), 카드는 name/level/desc를 쓴다.
+## icon은 res://art/icons/<id>.png 가 있으면 카드 윗칸에 표시된다.
+static func _option(kind: String, id: String, title: String, level_text: String, desc: String) -> Dictionary:
+	return {"kind": kind, "id": id, "name": title, "level": level_text, "desc": desc,
+		"icon": "res://art/icons/%s.png" % (id if id != "" else kind),
+		"label": "%s  %s\n   %s" % [title, level_text, desc.replace("\n", " ")]}
+
+
 func _roll_options() -> Array:
 	var pool := []
 	for id in GameData.WEAPONS:
 		var d: Dictionary = GameData.WEAPONS[id]
 		var lv := player.weapon_level(id)
 		if lv == 0 and player.weapons.size() < GameData.MAX_WEAPONS:
-			pool.append({"kind": "weapon", "id": id, "label": "%s  [새 무기]\n   %s" % [d.name, d.desc]})
+			pool.append(_option("weapon", id, d.name, "새 무기", d.desc))
 		elif lv > 0 and lv < d.max_level:
-			var hint := ""
-			if lv + 1 == d.max_level:
+			var desc: String = d.desc
+			if lv + 1 == d.max_level and GameData.EVOLUTIONS.has(id):
 				var evo: Dictionary = GameData.EVOLUTIONS[id]
-				hint = "\n   (최대 레벨! %s가 있으면 보물 상자에서 진화)" % GameData.PASSIVES[evo.passive].name
-			pool.append({"kind": "weapon", "id": id, "label": "%s  Lv %d → %d\n   %s%s" % [d.name, lv, lv + 1, d.desc, hint]})
+				desc += "\n\n최대 레벨! %s가 있으면\n보물 상자에서 진화" % GameData.PASSIVES[evo.passive].name
+			pool.append(_option("weapon", id, d.name, "Lv %d → %d" % [lv, lv + 1], desc))
 	for id in GameData.PASSIVES:
 		var d: Dictionary = GameData.PASSIVES[id]
 		var lv := player.passive_level(id)
 		if lv == 0 and player.passives.size() >= GameData.MAX_PASSIVES:
 			continue
 		if lv < d.max_level:
-			pool.append({"kind": "passive", "id": id, "label": "%s  Lv %d → %d\n   %s" % [d.name, lv, lv + 1, d.desc]})
+			pool.append(_option("passive", id, d.name, "Lv %d → %d" % [lv, lv + 1], d.desc))
 	pool.shuffle()
+	# 첫 레벨업에는 기폭수리검이 꼭 나온다
+	if _levelups_rolled == 0:
+		for i in pool.size():
+			if pool[i].kind == "weapon" and pool[i].id == GameData.EARLY_WEAPON:
+				var early = pool.pop_at(i)
+				pool.insert(randi() % mini(3, pool.size() + 1), early)
+				break
+	_levelups_rolled += 1
 	var options := pool.slice(0, 3)
 	if options.is_empty():
-		options = [{"kind": "heal", "id": "", "label": "당근\n   체력 30 회복"}]
+		options = [_option("heal", "", "당근", "회복", "체력 30 회복")]
 	return options
 
 

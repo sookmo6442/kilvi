@@ -6,6 +6,7 @@ var damage := 5.0
 var pierce := 1
 var life := 1.2
 var crit := false
+var size := 1.0 # 공격 범위(검은 털)에 따라 커진다. 맞는 범위도 같이 커진다.
 var _spent := false
 
 
@@ -19,6 +20,7 @@ func _ready() -> void:
 	shape.shape = circle
 	add_child(shape)
 	rotation = velocity.angle()
+	scale = Vector2.ONE * size
 	area_entered.connect(_on_area_entered)
 
 
