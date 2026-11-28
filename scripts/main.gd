@@ -75,7 +75,6 @@ func _ready() -> void:
 	menu = MenuScript.new()
 	add_child(menu)
 
-	player.hp_changed.connect(hud.set_hp)
 	player.xp_changed.connect(hud.set_xp)
 	player.leveled_up.connect(_on_leveled_up)
 	player.died.connect(_on_player_died)
@@ -84,7 +83,6 @@ func _ready() -> void:
 	menu.button_pressed.connect(_on_menu_button)
 
 	player.add_or_level_weapon("kunai")
-	hud.set_hp(player.hp, player.max_hp)
 	hud.set_xp(player.xp, player.xp_needed, player.level)
 	_open_skill_select.call_deferred()
 
@@ -105,7 +103,6 @@ func _process(delta: float) -> void:
 		return
 	time += delta
 	hud.set_time(time)
-	hud.set_dash(player.dash_cooldown_left if player.dash_charges <= 0 else 0.0, Player.DASH_COOLDOWN, player.dash_charges, player.max_dash_charges())
 	hud.set_skill(player.skill_cooldown_left, player.skill_cooldown())
 	_update_spawns(delta)
 	_update_bosses()

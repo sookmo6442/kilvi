@@ -9,6 +9,7 @@ signal xp_changed(xp: int, xp_needed: int, level: int)
 signal weapon_evolved(weapon_id: String)
 
 const KilviVisual := preload("res://scripts/kilvi_visual.gd")
+const OverheadBars := preload("res://scripts/ui/overhead_bars.gd")
 const WEAPON_SCRIPTS := {
 	"kunai": preload("res://scripts/weapons/kunai.gd"),
 	"shuriken": preload("res://scripts/weapons/shuriken.gd"),
@@ -88,6 +89,7 @@ func _ready() -> void:
 	_visual.base_scale = 1.4
 	_visual.scale = Vector2.ONE * 1.4
 	add_child(_visual)
+	add_child(OverheadBars.new())
 
 
 func _physics_process(delta: float) -> void:
