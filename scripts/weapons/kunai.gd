@@ -47,6 +47,7 @@ func fire() -> void:
 		p.pierce = _pierce() + (2 if crit else 0)
 		p.crit = crit
 		p.life = 1.2 * player.duration
+		p.size = player.area_visual()
 		player.world.add_child(p)
 		if i < _count() - 1:
 			await get_tree().create_timer(0.04 if evolved else 0.07, false).timeout
@@ -69,4 +70,5 @@ func _storm_burst(mult: float, crit: bool) -> void:
 		p.pierce = 2 + (2 if crit else 0)
 		p.crit = crit
 		p.life = 0.9 * player.duration
+		p.size = player.area_visual()
 		player.world.add_child(p)

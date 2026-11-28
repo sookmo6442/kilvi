@@ -40,14 +40,14 @@ func _physics_process(delta: float) -> void:
 			var r := _radius() * (1.45 if outer else 0.75)
 			b.position = Vector2.from_angle(ang + TAU * k / ring_n) * r
 			b.damage = _damage()
-			b.scale = Vector2.ONE * player.area * 1.3
+			b.scale = Vector2.ONE * player.area_visual() * 1.3
 			b.evolved = true
 		return
 	for i in n:
 		var b: Area2D = _blades[i]
 		b.position = Vector2.from_angle(_angle + TAU * i / n) * _radius()
 		b.damage = _damage()
-		b.scale = Vector2.ONE * player.area
+		b.scale = Vector2.ONE * player.area_visual()
 
 
 func _rebuild() -> void:

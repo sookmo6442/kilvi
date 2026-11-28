@@ -13,6 +13,7 @@ const WEAPON_SCRIPTS := {
 	"kunai": preload("res://scripts/weapons/kunai.gd"),
 	"shuriken": preload("res://scripts/weapons/shuriken.gd"),
 	"smoke": preload("res://scripts/weapons/smoke.gd"),
+	"bomb": preload("res://scripts/weapons/bomb_shuriken.gd"),
 }
 
 const DASH_DISTANCE := 64.0
@@ -37,6 +38,12 @@ var duration := 1.0
 var extra_projectiles := 0
 var speed_mult := 1.0
 var pickup_mult := 1.0
+
+
+## 공격 범위가 눈에 보이도록 크기는 범위 증가분의 2배로 키운다.
+## (검은 털 5레벨 = 범위 1.5배 → 쿠나이·표창 크기 2배)
+func area_visual() -> float:
+	return 1.0 + (area - 1.0) * 2.0
 
 var level := 1
 var xp := 0
