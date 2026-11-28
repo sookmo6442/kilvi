@@ -17,11 +17,10 @@ const SCHOOLS := {
 }
 
 const WEAPONS := {
-	"kunai": {"name": "쿠나이", "school": "비술", "desc": "가장 가까운 적에게 쿠나이를 던진다.", "max_level": 8},
+	"kunai": {"name": "쿠나이", "school": "비술", "desc": "기본 공격 강화. 가장 가까운 적에게 던지는 쿠나이의 피해가 오르고, 짝수 레벨마다 한 자루씩 늘어난다.", "max_level": 8},
 	"shuriken": {"name": "표창", "school": "비술", "desc": "킬비 주위를 도는 표창.", "max_level": 8},
 	"smoke": {"name": "연기탄", "school": "비술", "desc": "발밑에 적을 느리게 하는 연기를 남긴다.", "max_level": 8},
 	"bomb": {"name": "기폭수리검", "school": "비술", "desc": "아무 방향으로 날아가 적에게 박히고, 2초 뒤 폭발한다. 레벨이 오를수록 폭발이 세지고 커진다.", "max_level": 8},
-	"slash": {"name": "쿠나이 베기", "school": "체술", "desc": "바라보는 방향 앞을 부채꼴로 벤다. 맞은 적에게 표식. 5레벨부터 두 번 벤다.", "max_level": 8},
 	"spin": {"name": "회전 베기", "school": "체술", "desc": "주기적으로 킬비 주위를 한 바퀴 벤다. 레벨이 오를수록 넓고 자주 벤다.", "max_level": 8},
 	"fire": {"name": "화둔", "school": "인술", "desc": "바라보는 방향으로 불덩이를 쏜다. 맞으면 터지고 주변 적이 불탄다.", "max_level": 8},
 	"water": {"name": "수둔", "school": "인술", "desc": "적을 따라가는 물 유도탄. 맞으면 물이 튀어 주변 적까지 느려지고 젖는다.", "max_level": 8},
@@ -42,7 +41,6 @@ const PASSIVES := {
 
 ## 체술·인술 수치. 레벨 l에서 값 = base + per_level * (l - 1)
 const TECH := {
-	"slash": {"damage": 10.0, "damage_lv": 4.0, "radius": 40.0, "radius_lv": 2.0, "arc_deg": 120.0, "cooldown": 1.0, "cooldown_lv": -0.04, "double_from": 5},
 	"spin": {"damage": 9.0, "damage_lv": 3.5, "radius": 48.0, "radius_lv": 3.0, "cooldown": 2.6, "cooldown_lv": -0.12},
 	"fire": {"damage": 16.0, "damage_lv": 6.0, "blast": 28.0, "blast_lv": 2.0, "cooldown": 1.8, "cooldown_lv": -0.06, "speed": 210.0, "burn_time": 3.0, "burn_dps": 4.0, "burn_dps_lv": 1.5},
 	"water": {"damage": 7.0, "damage_lv": 3.0, "cooldown": 1.4, "cooldown_lv": -0.05, "speed": 170.0, "wet_time": 3.0, "slow_time": 1.5, "splash": 26.0},

@@ -14,7 +14,6 @@ const WEAPON_SCRIPTS := {
 	"shuriken": preload("res://scripts/weapons/shuriken.gd"),
 	"smoke": preload("res://scripts/weapons/smoke.gd"),
 	"bomb": preload("res://scripts/weapons/bomb_shuriken.gd"),
-	"slash": preload("res://scripts/weapons/kunai_slash.gd"),
 	"spin": preload("res://scripts/weapons/spin_slash.gd"),
 	"fire": preload("res://scripts/weapons/fire_jutsu.gd"),
 	"water": preload("res://scripts/weapons/water_jutsu.gd"),

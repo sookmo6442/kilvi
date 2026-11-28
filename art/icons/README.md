@@ -9,7 +9,6 @@
 | shuriken.png | 표창 |
 | smoke.png | 연기탄 |
 | bomb.png | 기폭수리검 |
-| slash.png | 쿠나이 베기 (체술) |
 | spin.png | 회전 베기 (체술) |
 | fire.png | 화둔 (인술) |
 | water.png | 수둔 (인술) |
