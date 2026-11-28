@@ -5,7 +5,7 @@ extends RefCounted
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
 const MAX_WEAPONS := 4
 const MAX_PASSIVES := 6
-const VERSION := "0.7"
+const VERSION := "0.8"
 const MAX_ENEMIES := 500
 
 const WEAPONS := {
