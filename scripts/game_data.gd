@@ -3,28 +3,50 @@ extends RefCounted
 ## 밸런스 수치와 이름을 한곳에 모아 둔 데이터. 숫자는 여기서만 고치면 된다.
 
 const RUN_LENGTH := 1200.0 # 한 판 길이(초). 이때 최종 보스가 나오고, 잡으면 클리어.
-const MAX_WEAPONS := 4
+const MAX_WEAPONS := 6
 const MAX_PASSIVES := 6
-const VERSION := "0.9"
+const VERSION := "0.10"
 const MAX_ENEMIES := 500
 
+## 갈래: 체술(쿠나이를 쥐고 베기), 비술(닌자 도구), 인술(속성 술법).
+## 지금은 레벨업 카드에 갈래를 표시만 한다. 숙련도·마스터는 다음 단계.
+const SCHOOLS := {
+	"체술": Color(1.0, 0.62, 0.1),
+	"비술": Color(0.8, 0.8, 0.85),
+	"인술": Color(0.45, 0.75, 1.0),
+}
+
 const WEAPONS := {
-	"kunai": {"name": "쿠나이", "desc": "가장 가까운 적에게 쿠나이를 던진다.", "max_level": 8},
-	"shuriken": {"name": "표창", "desc": "킬비 주위를 도는 표창.", "max_level": 8},
-	"smoke": {"name": "연기탄", "desc": "발밑에 적을 느리게 하는 연기를 남긴다.", "max_level": 8},
-	"bomb": {"name": "기폭수리검", "desc": "아무 방향으로 날아가 적에게 박히고, 2초 뒤 폭발한다. 레벨이 오를수록 폭발이 세지고 커진다.", "max_level": 8},
+	"kunai": {"name": "쿠나이", "school": "비술", "desc": "가장 가까운 적에게 쿠나이를 던진다.", "max_level": 8},
+	"shuriken": {"name": "표창", "school": "비술", "desc": "킬비 주위를 도는 표창.", "max_level": 8},
+	"smoke": {"name": "연기탄", "school": "비술", "desc": "발밑에 적을 느리게 하는 연기를 남긴다.", "max_level": 8},
+	"bomb": {"name": "기폭수리검", "school": "비술", "desc": "아무 방향으로 날아가 적에게 박히고, 2초 뒤 폭발한다. 레벨이 오를수록 폭발이 세지고 커진다.", "max_level": 8},
+	"slash": {"name": "쿠나이 베기", "school": "체술", "desc": "바라보는 방향 앞을 부채꼴로 벤다. 맞은 적에게 표식. 5레벨부터 두 번 벤다.", "max_level": 8},
+	"spin": {"name": "회전 베기", "school": "체술", "desc": "주기적으로 킬비 주위를 한 바퀴 벤다. 레벨이 오를수록 넓고 자주 벤다.", "max_level": 8},
+	"fire": {"name": "화둔", "school": "인술", "desc": "바라보는 방향으로 불덩이를 쏜다. 맞으면 터지고 주변 적이 불탄다.", "max_level": 8},
+	"water": {"name": "수둔", "school": "인술", "desc": "적을 따라가는 물 유도탄. 맞으면 물이 튀어 주변 적까지 느려지고 젖는다.", "max_level": 8},
+	"thunder": {"name": "뇌둔", "school": "인술", "desc": "랜덤한 적에게 번개가 떨어진다. 젖은 적을 먼저 노리고, 주변 젖은 적에게도 튄다.", "max_level": 8},
 }
 
 ## 첫 레벨업에 반드시 나오는 무기
 const EARLY_WEAPON := "bomb"
 
 const PASSIVES := {
-	"wraps": {"name": "손목 붕대", "desc": "투사체 +1  (쿠나이 진화 재료)", "max_level": 5},
-	"fur": {"name": "검은 털", "desc": "공격 범위 +10%. 쿠나이·표창이 커진다. (표창 진화 재료)", "max_level": 5},
-	"collar": {"name": "스파이크 목걸이", "desc": "지속시간 +15%  (연기탄 진화 재료)", "max_level": 5},
-	"charm": {"name": "주황 부적", "desc": "공격력 +10%", "max_level": 5},
-	"legs": {"name": "단련된 다리", "desc": "이동 속도 +8%", "max_level": 5},
-	"ears": {"name": "긴 귀", "desc": "획득 범위 +25%", "max_level": 5},
+	"wraps": {"name": "손목 붕대", "school": "비술", "desc": "투사체 +1  (쿠나이 진화 재료)", "max_level": 5},
+	"fur": {"name": "검은 털", "school": "체술", "desc": "공격 범위 +10%. 쿠나이·표창·베기가 커진다. (표창 진화 재료)", "max_level": 5},
+	"collar": {"name": "스파이크 목걸이", "school": "인술", "desc": "지속시간 +15%  (연기탄 진화 재료)", "max_level": 5},
+	"charm": {"name": "주황 부적", "school": "인술", "desc": "공격력 +10%", "max_level": 5},
+	"legs": {"name": "단련된 다리", "school": "체술", "desc": "이동 속도 +8%", "max_level": 5},
+	"ears": {"name": "긴 귀", "school": "체술", "desc": "획득 범위 +25%", "max_level": 5},
+}
+
+## 체술·인술 수치. 레벨 l에서 값 = base + per_level * (l - 1)
+const TECH := {
+	"slash": {"damage": 10.0, "damage_lv": 4.0, "radius": 40.0, "radius_lv": 2.0, "arc_deg": 120.0, "cooldown": 1.0, "cooldown_lv": -0.04, "double_from": 5},
+	"spin": {"damage": 9.0, "damage_lv": 3.5, "radius": 48.0, "radius_lv": 3.0, "cooldown": 2.6, "cooldown_lv": -0.12},
+	"fire": {"damage": 16.0, "damage_lv": 6.0, "blast": 28.0, "blast_lv": 2.0, "cooldown": 1.8, "cooldown_lv": -0.06, "speed": 210.0, "burn_time": 3.0, "burn_dps": 4.0, "burn_dps_lv": 1.5},
+	"water": {"damage": 7.0, "damage_lv": 3.0, "cooldown": 1.4, "cooldown_lv": -0.05, "speed": 170.0, "wet_time": 3.0, "slow_time": 1.5, "splash": 26.0},
+	"thunder": {"damage": 22.0, "damage_lv": 8.0, "cooldown": 2.4, "cooldown_lv": -0.1, "radius": 16.0, "warn": 0.35, "chain_range": 80.0, "chain_max": 4, "chain_mult": 0.7},
 }
 
 ## 진화: 무기가 최대 레벨이고 짝 패시브를 1레벨 이상 갖고 있으면

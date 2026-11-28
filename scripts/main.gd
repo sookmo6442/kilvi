@@ -418,8 +418,10 @@ var _levelups_rolled := 0
 
 ## 카드 한 장. label은 예전 한 줄 표기(테스트·로그용), 카드는 name/level/desc를 쓴다.
 ## icon은 res://art/icons/<id>.png 가 있으면 카드 윗칸에 표시된다.
-static func _option(kind: String, id: String, title: String, level_text: String, desc: String) -> Dictionary:
-	return {"kind": kind, "id": id, "name": title, "level": level_text, "desc": desc,
+static func _option(kind: String, id: String, title: String, level_text: String, desc: String, school: String = "") -> Dictionary:
+	if school != "":
+		level_text = "%s · %s" % [school, level_text]
+	return {"kind": kind, "id": id, "name": title, "level": level_text, "desc": desc, "school": school,
 		"icon": "res://art/icons/%s.png" % (id if id != "" else kind),
 		"label": "%s  %s\n   %s" % [title, level_text, desc.replace("\n", " ")]}
 
@@ -430,20 +432,20 @@ func _roll_options() -> Array:
 		var d: Dictionary = GameData.WEAPONS[id]
 		var lv := player.weapon_level(id)
 		if lv == 0 and player.weapons.size() < GameData.MAX_WEAPONS:
-			pool.append(_option("weapon", id, d.name, "새 무기", d.desc))
+			pool.append(_option("weapon", id, d.name, "새 기술", d.desc, d.get("school", "")))
 		elif lv > 0 and lv < d.max_level:
 			var desc: String = d.desc
 			if lv + 1 == d.max_level and GameData.EVOLUTIONS.has(id):
 				var evo: Dictionary = GameData.EVOLUTIONS[id]
 				desc += "\n\n최대 레벨! %s가 있으면\n보물 상자에서 진화" % GameData.PASSIVES[evo.passive].name
-			pool.append(_option("weapon", id, d.name, "Lv %d → %d" % [lv, lv + 1], desc))
+			pool.append(_option("weapon", id, d.name, "Lv %d → %d" % [lv, lv + 1], desc, d.get("school", "")))
 	for id in GameData.PASSIVES:
 		var d: Dictionary = GameData.PASSIVES[id]
 		var lv := player.passive_level(id)
 		if lv == 0 and player.passives.size() >= GameData.MAX_PASSIVES:
 			continue
 		if lv < d.max_level:
-			pool.append(_option("passive", id, d.name, "Lv %d → %d" % [lv, lv + 1], d.desc))
+			pool.append(_option("passive", id, d.name, "패시브 Lv %d → %d" % [lv, lv + 1], d.desc, d.get("school", "")))
 	pool.shuffle()
 	# 첫 레벨업에는 기폭수리검이 꼭 나온다
 	if _levelups_rolled == 0:

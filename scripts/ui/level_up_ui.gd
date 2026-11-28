@@ -147,6 +147,7 @@ func open(options: Array, title: String = "레벨 업!", focus_index: int = 0) -
 			_names[i].text = o.get("name", o.get("label", ""))
 			_levels[i].text = o.get("level", "")
 			_levels[i].visible = _levels[i].text != ""
+			_levels[i].add_theme_color_override("font_color", GameData.SCHOOLS.get(o.get("school", ""), UiStyle.ORANGE))
 			_descs[i].text = _wrap(o.get("desc", ""), _descs[i])
 			var path: String = o.get("icon", "")
 			_icons[i].texture = load(path) if path != "" and ResourceLoader.exists(path) else null
