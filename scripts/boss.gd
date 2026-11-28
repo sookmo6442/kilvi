@@ -359,4 +359,8 @@ func _draw() -> void:
 		for i in 3:
 			var a := _t * 4.0 + TAU * i / 3.0
 			draw_circle(Vector2(cos(a) * 12.0, -radius - 8 + sin(a) * 3.0), 2.0, Color(1.0, 0.9, 0.3))
-	pass # 보스 표식은 화면 위 보스 체력바에 표시한다
+	# 화면 밖이면 가장자리에 깜빡이는 빨간 화살표 (좌우 뒤집힘·흔들림을 되돌려 월드 방향 그대로 그린다)
+	draw_set_transform_matrix(get_global_transform().affine_inverse() * Transform2D(0.0, global_position))
+	var pulse := 0.6 + 0.4 * absf(sin(_t * 6.0))
+	SpecialItem.draw_offscreen_arrow(self, player, Color(1.0, 0.15, 0.15, pulse), 1.6)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

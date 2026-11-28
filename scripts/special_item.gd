@@ -72,7 +72,7 @@ func _draw() -> void:
 
 
 ## 화면 밖에 있으면 화면 가장자리(킬비 기준)에 작은 화살표를 그린다. 임무 표식도 같이 쓴다.
-static func draw_offscreen_arrow(node: Node2D, p: Player, col: Color) -> void:
+static func draw_offscreen_arrow(node: Node2D, p: Player, col: Color, sz: float = 1.0) -> void:
 	if p == null:
 		return
 	var off := node.global_position - p.global_position
@@ -81,7 +81,10 @@ static func draw_offscreen_arrow(node: Node2D, p: Player, col: Color) -> void:
 		return
 	var k := minf(half.x / maxf(absf(off.x), 0.01), half.y / maxf(absf(off.y), 0.01))
 	var at := p.global_position + off * k - node.global_position # node 기준 좌표
-	var d := off.normalized()
+	# 길쭉한 화살촉: 뾰족한 쪽이 대상 방향
+	var d := off.normalized() * sz
 	var side := d.orthogonal()
-	node.draw_colored_polygon(PackedVector2Array([at + d * 7.0, at - d * 4.0 + side * 5.0, at - d * 4.0 - side * 5.0]), col)
-	node.draw_polyline(PackedVector2Array([at + d * 7.0, at - d * 4.0 + side * 5.0, at - d * 4.0 - side * 5.0, at + d * 7.0]), Color.BLACK, 1.0)
+	var tri := PackedVector2Array([at + d * 8.0, at - d * 5.0 + side * 4.0, at - d * 2.0, at - d * 5.0 - side * 4.0])
+	node.draw_colored_polygon(tri, col)
+	tri.append(tri[0])
+	node.draw_polyline(tri, Color.BLACK, 1.0)
