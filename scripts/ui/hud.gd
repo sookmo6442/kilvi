@@ -2,6 +2,8 @@ extends CanvasLayer
 ## 화면 정보: 위쪽에 레벨·시간·처치 수, 맨 아래에 경험치 바.
 ## 체력과 대시는 킬비 머리 위(overhead_bars.gd)에 뜬다.
 
+const SkillSlot := preload("res://scripts/ui/skill_slot.gd")
+
 var _xp_bar: ProgressBar
 var _level_label: Label
 var _time_label: Label
@@ -11,7 +13,7 @@ var _skill_label: Label
 var _boss_label: Label
 var _boss_bar: ProgressBar
 var _boss_marks: ProgressBar
-var _skill_bar: ProgressBar
+var _skill_slot: SkillSlot
 var _message_label: Label
 var _message_left := 0.0
 
@@ -84,18 +86,18 @@ func _ready() -> void:
 	root.add_child(_boss_marks)
 	hide_boss()
 
-	# 왼쪽 아래: 특수 스킬
+	# 왼쪽 아래: 특수 스킬 아이콘과 이름
+	_skill_slot = SkillSlot.new()
+	_skill_slot.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_skill_slot.position = Vector2(6, -44)
+	root.add_child(_skill_slot)
 	_skill_label = Label.new()
 	_skill_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_skill_label.position = Vector2(6, -36)
+	_skill_label.position = Vector2(40, -34)
+	_skill_label.add_theme_font_size_override("font_size", 12)
 	root.add_child(_skill_label)
-	_skill_bar = UiStyle.bar(UiStyle.ORANGE, 4)
-	_skill_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_skill_bar.position = Vector2(6, -15)
-	_skill_bar.size = Vector2(110, 4)
-	root.add_child(_skill_bar)
 	_skill_label.visible = false
-	_skill_bar.visible = false
+	_skill_slot.visible = false
 
 	var ver := Label.new()
 	ver.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -117,28 +119,18 @@ func _process(delta: float) -> void:
 		_message_label.modulate.a = clampf(_message_left / 0.4, 0.0, 1.0)
 
 
-var _skill_name := ""
-var _skill_key := ""
-
-
-func setup_skill(skill_name: String, key: String) -> void:
-	_skill_name = skill_name
-	_skill_key = key
+func setup_skill(id: String, skill_name: String, key: String) -> void:
+	_skill_slot.setup(id, skill_name, key)
+	_skill_label.text = skill_name
 	_skill_label.visible = true
-	_skill_bar.visible = true
+	_skill_slot.visible = true
 
 
 func set_skill(left: float, total: float) -> void:
-	if _skill_name == "":
+	if not _skill_slot.visible:
 		return
-	_skill_bar.max_value = total
-	_skill_bar.value = total - left
-	if left > 0.0:
-		_skill_label.text = "[%s] %s  %d초" % [_skill_key, _skill_name, ceili(left)]
-		_skill_label.modulate = Color(0.7, 0.7, 0.7)
-	else:
-		_skill_label.text = "[%s] %s  준비" % [_skill_key, _skill_name]
-		_skill_label.modulate = Color.WHITE
+	_skill_slot.set_cooldown(left, total)
+	_skill_label.modulate = Color(0.6, 0.6, 0.6) if left > 0.0 else Color.WHITE
 
 
 func set_boss(boss_name: String, hp: float, max_hp: float, marks: int, mark_limit: int, staggered: bool) -> void:

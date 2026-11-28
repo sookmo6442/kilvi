@@ -463,7 +463,7 @@ func _on_upgrade_chosen(option: Dictionary) -> void:
 		player.skill_id = option.id
 		last_skill = option.id
 		var d: Dictionary = GameData.SKILLS[option.id]
-		hud.setup_skill(d.name, d.key)
+		hud.setup_skill(option.id, d.name, d.key)
 		return
 	match option.kind:
 		"weapon": player.add_or_level_weapon(option.id)
