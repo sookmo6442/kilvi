@@ -152,11 +152,13 @@ static var _window_fitted := false
 
 
 func _fit_window() -> void:
-	if _window_fitted or DisplayServer.get_name() == "headless":
+	# 에디터 안 Game 탭에 끼워 넣어 실행하면 창 크기는 Game 탭이 정한다.
+	# 끼워 넣은 창은 전체 화면이 안 돼서 경고가 뜨므로 건드리지 않는다.
+	if _window_fitted or DisplayServer.get_name() == "headless" or _is_embedded():
 		return
 	_window_fitted = true
 	var win := get_window()
-	if win.mode != Window.MODE_WINDOWED or Engine.is_embedded_in_editor():
+	if win.mode != Window.MODE_WINDOWED:
 		return
 	var screen := DisplayServer.window_get_current_screen()
 	var full := DisplayServer.screen_get_size(screen)
@@ -169,6 +171,10 @@ func _fit_window() -> void:
 	_set_windowed(k_win, usable)
 
 
+static func _is_embedded() -> bool:
+	return Engine.is_embedded_in_editor() or OS.get_cmdline_args().has("--embedded")
+
+
 func _set_windowed(k: int, usable: Rect2i) -> void:
 	var win := get_window()
 	win.size = BASE_SIZE * k
@@ -176,6 +182,8 @@ func _set_windowed(k: int, usable: Rect2i) -> void:
 
 
 func _toggle_fullscreen() -> void:
+	if _is_embedded():
+		return # 에디터 Game 탭 안에서는 전체 화면이 안 된다
 	var win := get_window()
 	if win.mode == Window.MODE_FULLSCREEN or win.mode == Window.MODE_EXCLUSIVE_FULLSCREEN:
 		win.mode = Window.MODE_WINDOWED
