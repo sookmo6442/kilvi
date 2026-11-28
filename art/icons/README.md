@@ -9,6 +9,13 @@
 | shuriken.png | 표창 |
 | smoke.png | 연기탄 |
 | bomb.png | 기폭수리검 |
+| gale.png | 질풍 (체술) |
+| leap.png | 그림자 도약 (체술) |
+| moon.png | 월면 낙하 (체술) |
+| fire.png | 화둔 (인술) |
+| water.png | 수둔 (인술) |
+| thunder.png | 뇌둔 (인술) |
+| flash.png | 섬광 베기 (특수 스킬) |
 | wraps.png | 손목 붕대 |
 | fur.png | 검은 털 |
 | collar.png | 스파이크 목걸이 |

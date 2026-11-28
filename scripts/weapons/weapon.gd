@@ -51,3 +51,20 @@ func nearest_enemy(max_dist: float = 99999.0) -> Enemy:
 			best_d = d
 			best = enemy
 	return best
+
+
+## GameData.TECH[id]에서 레벨에 맞는 값: base + base_lv * (level - 1)
+func tech(id: String, key: String) -> float:
+	var d: Dictionary = GameData.TECH[id]
+	return d[key] + d.get(key + "_lv", 0.0) * (level - 1)
+
+
+func enemies_in_radius(center: Vector2, r: float) -> Array[Enemy]:
+	var out: Array[Enemy] = []
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var enemy := e as Enemy
+		if enemy == null or enemy.dead:
+			continue
+		if center.distance_to(enemy.global_position) <= r + enemy.radius * enemy.size_mult:
+			out.append(enemy)
+	return out

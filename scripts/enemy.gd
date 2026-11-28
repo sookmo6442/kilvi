@@ -154,6 +154,44 @@ func _physics_process(delta: float) -> void:
 	scale = Vector2(flip, 1.0 + sin(_t * 8.0) * 0.06) * size_mult
 
 
+# --- 상태 이상 (인술) ---------------------------------------------------
+var wet_left := 0.0   # 수둔: 젖음. 젖은 적에게 떨어진 번개는 주변 젖은 적에게 튄다.
+var burn_left := 0.0  # 화둔: 불탐. 0.5초마다 피해.
+var burn_dps := 0.0
+var _burn_tick := 0.0
+
+
+func apply_wet(t: float) -> void:
+	if wet_left <= 0.0:
+		queue_redraw()
+	wet_left = maxf(wet_left, t)
+
+
+func apply_burn(t: float, dps: float) -> void:
+	if burn_left <= 0.0:
+		queue_redraw()
+	burn_left = maxf(burn_left, t)
+	burn_dps = maxf(burn_dps, dps)
+
+
+func _process(delta: float) -> void:
+	if dead:
+		return
+	if wet_left > 0.0:
+		wet_left -= delta
+		if wet_left <= 0.0:
+			queue_redraw()
+	if burn_left > 0.0:
+		burn_left -= delta
+		_burn_tick += delta
+		if _burn_tick >= 0.5:
+			_burn_tick -= 0.5
+			take_damage(burn_dps * 0.5)
+		if burn_left <= 0.0:
+			burn_dps = 0.0
+			queue_redraw()
+
+
 func take_damage(amount: float, knockback: Vector2 = Vector2.ZERO) -> void:
 	if dead:
 		return
@@ -258,4 +296,19 @@ func _draw_marks() -> void:
 		for i in mark_limit:
 			var c := Color(1.0, 0.25, 0.2) if i < marks else Color(0, 0, 0, 0.35)
 			draw_rect(Rect2(-w / 2.0 + i * 4.0, 0, 3, 3), c)
+	_draw_status(inv)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_status(inv: Vector2) -> void:
+	# 머리 위 작은 상태 표시: 젖음(물방울), 불탐(불꽃)
+	var x := -4.0 if wet_left > 0.0 and burn_left > 0.0 else 0.0
+	if wet_left > 0.0:
+		draw_set_transform(Vector2(x, -radius - 6), 0.0, inv)
+		draw_colored_polygon(PackedVector2Array([Vector2(0, -4), Vector2(2.5, 0), Vector2(-2.5, 0)]), Color(0.4, 0.7, 1.0))
+		draw_circle(Vector2(0, 0.5), 2.5, Color(0.4, 0.7, 1.0))
+		x += 8.0
+	if burn_left > 0.0:
+		draw_set_transform(Vector2(x, -radius - 6), 0.0, inv)
+		draw_colored_polygon(PackedVector2Array([Vector2(0, -5), Vector2(3, 1), Vector2(0, 3), Vector2(-3, 1)]), Color(1.0, 0.45, 0.1))
+		draw_circle(Vector2(0, 1), 1.5, Color(1.0, 0.85, 0.3))

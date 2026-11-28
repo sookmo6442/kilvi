@@ -15,12 +15,13 @@ const BossScript := preload("res://scripts/boss.gd")
 const SEP_CELL := 16.0
 const RING_WAVES := [[90.0, "wisp"], [300.0, "bat"], [540.0, "fox"], [840.0, "imp"], [1080.0, "ninja"]]
 
+const BASE_SIZE := Vector2i(640, 360) # 게임 화면 해상도 (project.godot과 같게)
 const CONTRACT_FIRST := 45.0 # 첫 표적 의뢰 시각(초)
 const CONTRACT_INTERVAL := 60.0
 const CONTRACT_TIME := 30.0 # 표적을 잡아야 하는 제한 시간
 
 ## 다시 하기를 눌러도 지난번 고른 스킬에 커서를 둔다
-static var last_skill := "stealth"
+static var last_skill := "flash"
 
 var world: Node2D
 var player: Player
@@ -44,6 +45,7 @@ var _last_hitstop := -1.0
 func _ready() -> void:
 	randomize()
 	_setup_input()
+	_fit_window()
 
 	var bg := BackgroundScript.new()
 	add_child(bg)
@@ -73,7 +75,6 @@ func _ready() -> void:
 	menu = MenuScript.new()
 	add_child(menu)
 
-	player.hp_changed.connect(hud.set_hp)
 	player.xp_changed.connect(hud.set_xp)
 	player.leveled_up.connect(_on_leveled_up)
 	player.died.connect(_on_player_died)
@@ -82,7 +83,6 @@ func _ready() -> void:
 	menu.button_pressed.connect(_on_menu_button)
 
 	player.add_or_level_weapon("kunai")
-	hud.set_hp(player.hp, player.max_hp)
 	hud.set_xp(player.xp, player.xp_needed, player.level)
 	_open_skill_select.call_deferred()
 
@@ -103,7 +103,6 @@ func _process(delta: float) -> void:
 		return
 	time += delta
 	hud.set_time(time)
-	hud.set_dash(player.dash_cooldown_left, Player.DASH_COOLDOWN)
 	hud.set_skill(player.skill_cooldown_left, player.skill_cooldown())
 	_update_spawns(delta)
 	_update_bosses()
@@ -143,12 +142,64 @@ func _separate_enemies() -> void:
 		e.separation = push * 12.0
 
 
+## 창 크기: 화면은 640×360을 정수배로 키워서 그린다(도트가 고르게 보이도록).
+## 창으로 띄울 때보다 전체 화면이 더 큰 배수가 되면(1080p 모니터 = 3배) 전체 화면으로 시작한다.
+## 아니면 모니터에 들어가는 가장 큰 배수 크기의 창으로 가운데에 띄운다. F11로 전환.
+static var _window_fitted := false
+
+
+func _fit_window() -> void:
+	# 에디터 안 Game 탭에 끼워 넣어 실행하면 창 크기는 Game 탭이 정한다.
+	# 끼워 넣은 창은 전체 화면이 안 돼서 경고가 뜨므로 건드리지 않는다.
+	if _window_fitted or DisplayServer.get_name() == "headless" or _is_embedded():
+		return
+	_window_fitted = true
+	var win := get_window()
+	if win.mode != Window.MODE_WINDOWED:
+		return
+	var screen := DisplayServer.window_get_current_screen()
+	var full := DisplayServer.screen_get_size(screen)
+	var usable := DisplayServer.screen_get_usable_rect(screen)
+	var k_full := mini(full.x / BASE_SIZE.x, full.y / BASE_SIZE.y)
+	var k_win := maxi(1, mini(usable.size.x / BASE_SIZE.x, (usable.size.y - 40) / BASE_SIZE.y))
+	if k_full > k_win:
+		win.mode = Window.MODE_FULLSCREEN
+		return
+	_set_windowed(k_win, usable)
+
+
+static func _is_embedded() -> bool:
+	return Engine.is_embedded_in_editor() or OS.get_cmdline_args().has("--embedded")
+
+
+func _set_windowed(k: int, usable: Rect2i) -> void:
+	var win := get_window()
+	win.size = BASE_SIZE * k
+	win.position = usable.position + (usable.size - win.size) / 2
+
+
+func _toggle_fullscreen() -> void:
+	if _is_embedded():
+		return # 에디터 Game 탭 안에서는 전체 화면이 안 된다
+	var win := get_window()
+	if win.mode == Window.MODE_FULLSCREEN or win.mode == Window.MODE_EXCLUSIVE_FULLSCREEN:
+		win.mode = Window.MODE_WINDOWED
+		var usable := DisplayServer.screen_get_usable_rect(DisplayServer.window_get_current_screen())
+		_set_windowed(maxi(1, mini(usable.size.x / BASE_SIZE.x, (usable.size.y - 40) / BASE_SIZE.y)), usable)
+	else:
+		win.mode = Window.MODE_FULLSCREEN
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("fullscreen"):
+		_toggle_fullscreen()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause") and not _finished and not level_up_ui.visible:
 		if menu.visible:
 			menu.close()
 		else:
-			menu.open("일시정지", "", [["resume", "계속하기"], ["restart", "처음부터"], ["quit", "게임 종료"]])
+			menu.open("일시정지", "F11  전체 화면 전환", [["resume", "계속하기"], ["restart", "처음부터"], ["quit", "게임 종료"]])
 		get_viewport().set_input_as_handled()
 
 
@@ -364,8 +415,10 @@ var _levelups_rolled := 0
 
 ## 카드 한 장. label은 예전 한 줄 표기(테스트·로그용), 카드는 name/level/desc를 쓴다.
 ## icon은 res://art/icons/<id>.png 가 있으면 카드 윗칸에 표시된다.
-static func _option(kind: String, id: String, title: String, level_text: String, desc: String) -> Dictionary:
-	return {"kind": kind, "id": id, "name": title, "level": level_text, "desc": desc,
+static func _option(kind: String, id: String, title: String, level_text: String, desc: String, school: String = "") -> Dictionary:
+	if school != "":
+		level_text = "%s · %s" % [school, level_text]
+	return {"kind": kind, "id": id, "name": title, "level": level_text, "desc": desc, "school": school,
 		"icon": "res://art/icons/%s.png" % (id if id != "" else kind),
 		"label": "%s  %s\n   %s" % [title, level_text, desc.replace("\n", " ")]}
 
@@ -376,20 +429,20 @@ func _roll_options() -> Array:
 		var d: Dictionary = GameData.WEAPONS[id]
 		var lv := player.weapon_level(id)
 		if lv == 0 and player.weapons.size() < GameData.MAX_WEAPONS:
-			pool.append(_option("weapon", id, d.name, "새 무기", d.desc))
+			pool.append(_option("weapon", id, d.name, "새 기술", d.desc, d.get("school", "")))
 		elif lv > 0 and lv < d.max_level:
 			var desc: String = d.desc
 			if lv + 1 == d.max_level and GameData.EVOLUTIONS.has(id):
 				var evo: Dictionary = GameData.EVOLUTIONS[id]
 				desc += "\n\n최대 레벨! %s가 있으면\n보물 상자에서 진화" % GameData.PASSIVES[evo.passive].name
-			pool.append(_option("weapon", id, d.name, "Lv %d → %d" % [lv, lv + 1], desc))
+			pool.append(_option("weapon", id, d.name, "Lv %d → %d" % [lv, lv + 1], desc, d.get("school", "")))
 	for id in GameData.PASSIVES:
 		var d: Dictionary = GameData.PASSIVES[id]
 		var lv := player.passive_level(id)
 		if lv == 0 and player.passives.size() >= GameData.MAX_PASSIVES:
 			continue
 		if lv < d.max_level:
-			pool.append(_option("passive", id, d.name, "Lv %d → %d" % [lv, lv + 1], d.desc))
+			pool.append(_option("passive", id, d.name, "패시브 Lv %d → %d" % [lv, lv + 1], d.desc, d.get("school", "")))
 	pool.shuffle()
 	# 첫 레벨업에는 기폭수리검이 꼭 나온다
 	if _levelups_rolled == 0:
@@ -479,6 +532,11 @@ func _setup_input() -> void:
 		ev.axis = axes[action][0]
 		ev.axis_value = axes[action][1]
 		InputMap.action_add_event(action, ev)
+	# 전체 화면 전환: F11
+	InputMap.add_action("fullscreen")
+	var f11 := InputEventKey.new()
+	f11.physical_keycode = KEY_F11
+	InputMap.action_add_event("fullscreen", f11)
 	var buttons := {"dash": JOY_BUTTON_A, "skill": JOY_BUTTON_Y, "pause": JOY_BUTTON_START}
 	for action in buttons:
 		var ev := InputEventJoypadButton.new()

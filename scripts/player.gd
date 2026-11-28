@@ -9,11 +9,18 @@ signal xp_changed(xp: int, xp_needed: int, level: int)
 signal weapon_evolved(weapon_id: String)
 
 const KilviVisual := preload("res://scripts/kilvi_visual.gd")
+const OverheadBars := preload("res://scripts/ui/overhead_bars.gd")
 const WEAPON_SCRIPTS := {
 	"kunai": preload("res://scripts/weapons/kunai.gd"),
 	"shuriken": preload("res://scripts/weapons/shuriken.gd"),
 	"smoke": preload("res://scripts/weapons/smoke.gd"),
 	"bomb": preload("res://scripts/weapons/bomb_shuriken.gd"),
+	"gale": preload("res://scripts/weapons/body_tech.gd"),
+	"leap": preload("res://scripts/weapons/body_tech.gd"),
+	"moon": preload("res://scripts/weapons/body_tech.gd"),
+	"fire": preload("res://scripts/weapons/fire_jutsu.gd"),
+	"water": preload("res://scripts/weapons/water_jutsu.gd"),
+	"thunder": preload("res://scripts/weapons/thunder_jutsu.gd"),
 }
 
 const DASH_DISTANCE := 64.0
@@ -73,6 +80,7 @@ var decoy: Node2D = null
 var _invuln := 0.0
 var _dash_time := 0.0
 var _dash_dir := Vector2.ZERO
+var _dash_speed := 0.0
 var _visual: Node2D
 
 
@@ -81,13 +89,14 @@ func _ready() -> void:
 	_visual.base_scale = 1.4
 	_visual.scale = Vector2.ONE * 1.4
 	add_child(_visual)
+	add_child(OverheadBars.new())
 
 
 func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
 	_invuln = maxf(_invuln - delta, 0.0)
-	dash_cooldown_left = maxf(dash_cooldown_left - delta, 0.0)
+	_recharge_dash(delta)
 	skill_cooldown_left = maxf(skill_cooldown_left - delta, 0.0)
 	if stealth_left > 0.0:
 		stealth_left = maxf(stealth_left - delta, 0.0)
@@ -100,16 +109,19 @@ func _physics_process(delta: float) -> void:
 	if move_dir != Vector2.ZERO:
 		facing = move_dir.normalized()
 
-	if _dash_time > 0.0:
+	if _air_left > 0.0:
+		_update_jump(delta)
+	elif _dash_time > 0.0:
 		_dash_time -= delta
-		position += _dash_dir * (DASH_DISTANCE / DASH_TIME) * delta
+		position += _dash_dir * _dash_speed * delta
+		if _body_dash:
+			_update_body_dash(delta)
 	else:
 		position += move_dir * base_speed * speed_mult * delta
-		if Input.is_action_just_pressed("dash") and dash_cooldown_left <= 0.0:
-			_start_dash()
+		_handle_dash_input(delta)
 
 	_visual.moving = move_dir != Vector2.ZERO
-	_visual.dashing = _dash_time > 0.0
+	_visual.dashing = _dash_time > 0.0 and not _body_dash_visible()
 	_visual.invulnerable = _invuln > 0.0 and _dash_time <= 0.0 and stealth_left <= 0.0
 	_visual.stealthed = stealth_left > 0.0
 	_visual.ambush = ambush_ready
@@ -117,12 +129,219 @@ func _physics_process(delta: float) -> void:
 		_visual.scale = Vector2(signf(facing.x), 1.0) * _visual.base_scale
 
 
+func _body_dash_visible() -> bool:
+	# 체술을 하나라도 들면 대시 중에도 몸이 보이고 잔상이 남는다
+	return weapon_level("gale") > 0 or weapon_level("leap") > 0 or weapon_level("moon") > 0
+
+
 func _start_dash() -> void:
+	dash_charges -= 1
+	if dash_cooldown_left <= 0.0:
+		dash_cooldown_left = DASH_COOLDOWN
 	_dash_dir = facing
 	_dash_time = DASH_TIME
-	dash_cooldown_left = DASH_COOLDOWN
+	_dash_speed = DASH_DISTANCE / DASH_TIME
 	_invuln = maxf(_invuln, DASH_TIME + 0.1)
+	_body_dash = _body_dash_visible()
+	_gale_hit.clear()
+	_dash_start = position
+	_afterimage_t = 0.0
+	if weapon_level("leap") > 0:
+		_try_shadow_leap()
 	_spawn_puff(position)
+
+
+# --- 체술: 대시 버튼을 강화한다 ------------------------------------------
+# 질풍(gale): 대시가 지나간 길의 적을 벤다. 3·6레벨에 대시 충전 +1.
+# 그림자 도약(leap): 대시 방향 근처의 표식 있는 적 뒤로 순간이동해 벤다.
+# 월면 낙하(moon): 대시 버튼을 길게 눌렀다 떼면 뛰어올라, 공중에서 조종하다 내려찍는다.
+const JUMP_HOLD := 0.22
+const Afterimage := preload("res://scripts/effects/afterimage.gd")
+const Shockwave := preload("res://scripts/effects/shockwave.gd")
+const GaleTrail := preload("res://scripts/effects/gale_trail.gd")
+const SlashFx := preload("res://scripts/effects/slash.gd")
+
+var dash_charges := 1
+var _body_dash := false
+var _gale_hit := {}
+var _dash_start := Vector2.ZERO
+var _afterimage_t := 0.0
+var _hold := -1.0 # 대시 버튼을 누르고 있는 시간. -1이면 안 누름
+var _air_left := 0.0
+var _air_total := 0.6
+
+
+func max_dash_charges() -> int:
+	var lv := weapon_level("gale")
+	return 1 + (1 if lv >= 3 else 0) + (1 if lv >= 6 else 0)
+
+
+func is_airborne() -> bool:
+	return _air_left > 0.0
+
+
+func _recharge_dash(delta: float) -> void:
+	var cap := max_dash_charges()
+	if dash_charges >= cap:
+		dash_charges = cap
+		dash_cooldown_left = 0.0
+		return
+	dash_cooldown_left -= delta
+	if dash_cooldown_left <= 0.0:
+		dash_charges += 1
+		dash_cooldown_left = DASH_COOLDOWN if dash_charges < cap else 0.0
+
+
+func _body_tech(id: String, key: String) -> float:
+	var d: Dictionary = GameData.TECH[id]
+	return d[key] + d.get(key + "_lv", 0.0) * (weapon_level(id) - 1)
+
+
+func _handle_dash_input(delta: float) -> void:
+	if weapon_level("moon") <= 0:
+		if Input.is_action_just_pressed("dash") and dash_charges > 0:
+			_start_dash()
+		return
+	# 월면 낙하가 있으면: 짧게 누르면 대시, 길게 눌렀다 떼면 도약
+	if Input.is_action_just_pressed("dash") and dash_charges > 0:
+		_hold = 0.0
+	if _hold < 0.0:
+		return
+	if Input.is_action_pressed("dash"):
+		_hold += delta
+		_visual.charging = _hold >= JUMP_HOLD
+		return
+	var long := _hold >= JUMP_HOLD
+	_hold = -1.0
+	_visual.charging = false
+	if dash_charges <= 0:
+		return
+	if long:
+		_start_jump()
+	else:
+		_start_dash()
+
+
+func _update_body_dash(delta: float) -> void:
+	_afterimage_t -= delta
+	if _afterimage_t <= 0.0:
+		_afterimage_t = 0.025
+		_spawn_afterimage()
+	if weapon_level("gale") > 0:
+		var r := 12.0 * area_visual()
+		var dmg := _body_tech("gale", "damage") * might
+		for e in get_tree().get_nodes_in_group("enemies"):
+			var enemy := e as Enemy
+			if enemy == null or enemy.dead or _gale_hit.has(enemy.get_instance_id()):
+				continue
+			if position.distance_to(enemy.global_position) <= r + enemy.radius * enemy.size_mult:
+				_gale_hit[enemy.get_instance_id()] = true
+				enemy.take_damage(dmg, _dash_dir.orthogonal() * (90.0 if randf() < 0.5 else -90.0))
+	if _dash_time <= 0.0:
+		_body_dash = false
+		if weapon_level("gale") > 0 and world:
+			var trail := GaleTrail.new()
+			trail.from = _dash_start
+			trail.to = position
+			world.add_child(trail)
+
+
+func _spawn_afterimage() -> void:
+	if world == null:
+		return
+	var a := Afterimage.new()
+	a.position = position + _visual.position
+	a.visual_scale = _visual.scale
+	a.visual_rotation = _visual.rotation
+	world.add_child(a)
+
+
+func _try_shadow_leap() -> void:
+	var reach := _body_tech("leap", "range")
+	var best: Enemy = null
+	var best_d := reach
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var enemy := e as Enemy
+		if enemy == null or enemy.dead or enemy.marks <= 0:
+			continue
+		var to := enemy.global_position - position
+		var d := to.length()
+		if d < best_d and absf(angle_difference(_dash_dir.angle(), to.angle())) < deg_to_rad(45.0):
+			best_d = d
+			best = enemy
+	if best == null:
+		return
+	_spawn_afterimage()
+	_spawn_puff(position)
+	position = best.global_position + _dash_dir * (best.radius * best.size_mult + 10.0)
+	_dash_start = position
+	var fx: Node2D = SlashFx.new()
+	fx.position = best.global_position
+	world.add_child(fx)
+	var dmg := _body_tech("leap", "damage") * might
+	if best.is_boss:
+		best.take_damage(dmg * 1.5)
+		best.add_mark()
+	elif best.marks >= int(GameData.TECH.leap.execute_marks) and not best.is_target:
+		best.executed = true
+		best.take_damage(best.hp + 1.0)
+	else:
+		best.take_damage(dmg, _dash_dir * 60.0)
+		if not best.dead:
+			best.add_mark()
+
+
+func _start_jump() -> void:
+	dash_charges -= 1
+	if dash_cooldown_left <= 0.0:
+		dash_cooldown_left = DASH_COOLDOWN
+	_air_total = GameData.TECH.moon.air_time
+	_air_left = _air_total
+	_invuln = maxf(_invuln, _air_total + 0.1)
+	_spawn_puff(position)
+
+
+func _update_jump(delta: float) -> void:
+	_air_left -= delta
+	position += move_dir * base_speed * speed_mult * float(GameData.TECH.moon.air_speed) * delta
+	var k := clampf(1.0 - _air_left / _air_total, 0.0, 1.0)
+	_visual.position.y = -sin(PI * k) * 30.0
+	_visual.rotation = k * TAU * signf(_visual.scale.x)
+	queue_redraw()
+	if _air_left <= 0.0:
+		_air_left = 0.0
+		_visual.position.y = 0.0
+		_visual.rotation = 0.0
+		queue_redraw()
+		_land()
+
+
+func _land() -> void:
+	var r := _body_tech("moon", "radius") * area
+	var dmg := _body_tech("moon", "damage") * might
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var enemy := e as Enemy
+		if enemy == null or enemy.dead:
+			continue
+		var to := enemy.global_position - position
+		if to.length() <= r + enemy.radius * enemy.size_mult:
+			enemy.take_damage(dmg, to.normalized() * 220.0)
+			enemy.slow_time = maxf(enemy.slow_time, 0.8)
+	if world:
+		var w := Shockwave.new()
+		w.position = position
+		w.radius = r
+		world.add_child(w)
+
+
+func _draw() -> void:
+	# 도약 중 바닥 그림자
+	if _air_left > 0.0:
+		var k := 1.0 - _air_left / _air_total
+		var s := 1.0 - 0.4 * sin(PI * k)
+		draw_set_transform(Vector2(0, 10), 0.0, Vector2(1.0, 0.4))
+		draw_circle(Vector2.ZERO, 10.0 * s, Color(0, 0, 0, 0.35))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _spawn_puff(at: Vector2) -> void:
@@ -146,6 +365,25 @@ func use_skill() -> void:
 		stealth_left = STEALTH_TIME
 		ambush_ready = true
 		_spawn_puff(position)
+	elif skill_id == "flash":
+		_flash_slash()
+
+
+## 섬광 베기: 바라보는 방향으로 빠르게 돌진하며 초승달 검기를 날린다.
+func _flash_slash() -> void:
+	var f: Dictionary = GameData.FLASH
+	skill_cooldown_left = skill_cooldown()
+	_dash_dir = facing
+	_dash_time = f.dash_time
+	_dash_speed = f.dash_distance / f.dash_time
+	_invuln = maxf(_invuln, f.dash_time + 0.15)
+	var wave := preload("res://scripts/effects/flash_wave.gd").new()
+	wave.position = position
+	wave.direction = facing
+	wave.damage = f.damage * might
+	wave.size = area_visual()
+	wave.life = f.wave_life * duration
+	world.add_child(wave)
 
 
 ## 통나무 둔갑: 맞는 순간 통나무를 남기고 빈자리로 순간이동한다.
